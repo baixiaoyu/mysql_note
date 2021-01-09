@@ -1,75 +1,43 @@
-我们知道InnoDB使用buffer pool来缓存从磁盘读取到内存的数据页。buffer pool通常由数个内存块加上一组控制结构体对象组成。内存块的个数取决于buffer pool instance的个数，不过在5.7版本中开始默认以128M（可配置）的chunk单位分配内存块，这样做的目的是为了支持buffer pool的在线动态调整大小。
+buffer pool的刷新是由page_cleaners线程操作的，这个线程的数量由innodb_page_cleaner控制数量，innodb_max_dirty_pages_pct_lwm 这个参数是脏页的最低水位线，达到这个值后，会启动刷新，默认0，不会启动提前的刷新。innodb_max_dirty_pages_pct_lwm这个参数就是来提前刷新脏页用的。
 
-Buffer pool的每个内存块通过mmap的方式分配内存，因此你会发现，在实例启动时虚存很高，而物理内存很低。这些大片的内存块又按照16KB划分为多个frame，用于存储数据页。
+mysql的主线程会在后台进行脏页的刷新，如果在buffer pool中的脏页超过了innodb_max_dirty_pages_pct的比例后，innodb会聚合刷新.
+innodb使用基于redo生成的速度和当前刷新频率的算法去评估刷新率， 自动调整刷新频率能帮助避免当大量的刷新限制了对于普通读写操作的io能力而导致的吞吐的突然下降。
+自动调整频率可以通过innodb_adaptive_flushing配置关闭掉，默认是开启的状态。
 
-虽然大多数情况下buffer pool是以16KB来存储数据页，但有一种例外：使用压缩表时，需要在内存中同时存储压缩页和解压页，对于压缩页，使用Binary buddy allocator(伙伴)算法来分配内存空间。例如我们读入一个8KB的压缩页，就从buffer pool中取一个16KB的block，取其中8KB，剩下的8KB放到空闲链表上；如果紧跟着另外一个4KB的压缩页读入内存，就可以从这8KB中分裂4KB，同时将剩下的4KB放到空闲链表上。
+innodb_flush_neighbors 这个参数是刷脏页的时候也把相邻的页刷出去，在hdd的时候有用，在ssd的情况下不用设置。
+innodb_lru_scan_depth这个参数指定的是针对每一个buffer pool size page cleaner线程刷多远的脏页，每秒执行一次，在写入负载高的情况下，考虑减小这个参数的设置，尤其是针对大的buffer pool, 这个参数的调整方法是从小到大调整，让free 的页最小为目标。
 
-为了管理buffer pool，每个buffer pool instance 使用如下几个链表来管理：
+innodb_flushing_avg_loops定义InnoDB保留先前计算的刷新状态快照的迭代次数，控制自适应刷新对前台工作负载变化的响应速度。较高的innodb_flushing_avg_loops值表示InnoDB将先前计算的快照保留的时间更长，因此自适应刷新的响应速度更慢。设置高值时，重要的是要确保重做日志利用率不达到75％（异步刷新开始的硬编码限制,为什么不能超过75%，超过75%开始异步刷新，会导致啥情况？），并确保innodb_max_dirty_pages_pct阈值将脏页数保持在适合工作负荷的水平。
 
-LRU链表包含所有读入内存的数据页；
-Flush_list包含被修改过的脏页；
-unzip_LRU包含所有解压页；
-Free list上存放当前空闲的block。
-另外为了避免查询数据页时扫描LRU，还为每个buffer pool instance维护了一个page hash，通过space id 和page no可以直接找到对应的page。
+具有一致的工作负载，较大的日志文件大小（innodb_log_file_size）和未达到日志空间利用率75％的较小峰值的系统应使用较高的innodb_flushing_avg_loops值，以保持刷新尽可能顺利。对于负载高峰或日志文件不能提供大量空间的系统，较小的值允许刷新以密切跟踪工作负载变化，并有助于避免达到75％的日志空间利用率。
 
-一般情况下，当我们需要读入一个Page时，首先根据space id 和page no找到对应的buffer pool instance。然后查询page hash，如果page hash中没有，则表示需要从磁盘读取。在读盘前首先我们需要为即将读入内存的数据页分配一个空闲的block。当free list上存在空闲的block时，可以直接从free list上摘取；如果没有，就需要从unzip_lru 或者 lru上驱逐page。
+请注意，如果刷新落后，则缓冲池刷新的速率可能会超过InnoDB可用的I / O容量（如innodb_io_capacity设置所定义，这个参数设置小了，脏页刷新多了，会被这个参数设置卡住，导致刷页变慢？）。在这种情况下，innodb_io_capacity_max值定义了I / O容量的上限，因此I / O活动的高峰不会消耗服务器的整个I / O容量。
 
-这里需要遵循一定的原则（参考函数buf_LRU_scan_and_free_block , 5.7.5）：
+innodb_io_capacity设置适用于所有缓冲池实例。刷新脏页后，I / O容量将在缓冲池实例之间平均分配。
 
-首先尝试从unzip_lru上驱逐解压页；
-如果没有，再尝试从Lru链表上驱逐Page；
-如果还是无法从Lru上获取到空闲block，用户线程就会参与刷脏，尝试做一次SINGLE PAGE FLUSH，单独从Lru上刷掉一个脏页，然后再重试。
-Buffer pool中的page被修改后，不是立刻写入磁盘，而是由后台线程定时写入，和大多数数据库系统一样，脏页的写盘遵循日志先行WAL原则，因此在每个block上都记录了一个最近被修改时的Lsn，写数据页时需要确保当前写入日志文件的redo不低于这个Lsn。
+InnoDB使用自适应刷新算法根据重做日志生成的速度和当前刷新率动态调整刷新率。目的是通过确保刷新活动与当前工作负载保持同步来使总体性能平稳。自动调整刷新率有助于避免吞吐量突然下降，当由于缓冲池刷新而导致的I / O活动突发影响普通读取和写入活动可用的I / O容量时，吞吐量可能会突然下降。
 
-然而基于WAL原则的刷脏策略可能带来一个问题：当数据库的写入负载过高时，产生redo log的速度极快，redo log可能很快到达同步checkpoint点。这时候需要进行刷脏来推进Lsn。由于这种行为是由用户线程在检查到redo log空间不够时触发，大量用户线程将可能陷入到这段低效的逻辑中，产生一个明显的性能拐点。
+例如，尖锐的检查点通常与产生大量重做条目的写密集型工作负载相关联，可能导致吞吐量的突然变化。当InnoDB要重用部分日志文件时，将出现一个尖锐的检查点。在执行此操作之前，必须清除日志文件该部分中所有具有重做条目的脏页。如果日志文件已满，则会出现尖锐的检查点，从而导致吞吐量暂时降低。即使未达到innodb_max_dirty_pages_pct阈值，也会发生这种情况。
 
-Page Cleaner线程
+自适应刷新算法通过跟踪缓冲池中的脏页数和生成重做日志记录的速率来帮助避免此类情况。根据此信息，它决定每秒从缓冲池刷新多少脏页，从而允许它管理工作负载的突然变化。
 
-在MySQL5.6中，开启了一个独立的page cleaner线程来进行刷lru list 和flush list。默认每隔一秒运行一次，5.6版本里提供了一大堆的参数来控制page cleaner的flush行为，包括：
+innodb_adaptive_flushing_lwm变量为重做日志容量定义了一个低水位线。超过该阈值时，即使禁用了innodb_adaptive_flushing变量，也会启用自适应刷新。
 
-innodb_adaptive_flushing_lwm， 
-innodb_max_dirty_pages_pct_lwm
-innodb_flushing_avg_loops
-innodb_io_capacity_max
-innodb_lru_scan_depth
-这里我们不一一介绍，总的来说，如果你发现redo log推进的非常快，为了避免用户线程陷入刷脏，可以通过调大innodb_io_capacity_max来解决，该参数限制了每秒刷新的脏页上限，调大该值可以增加Page cleaner线程每秒的工作量。如果你发现你的系统中free list不足，总是需要驱逐脏页来获取空闲的block时，可以适当调大innodb_lru_scan_depth 。该参数表示从每个buffer pool instance的lru上扫描的深度，调大该值有助于多释放些空闲页，避免用户线程去做single page flush。
+innodb buffer有多个instance，每个instance都有自己的lru? 怎么去找数据块的？会去扫描每个instance？怎么保证速度的？
 
-为了提升扩展性和刷脏效率，在5.7.4版本里引入了多个page cleaner线程，从而达到并行刷脏的效果。目前Page cleaner并未和buffer pool绑定，其模型为一个协调线程 + 多个工作线程，协调线程本身也是工作线程。因此如果innodb_page_cleaners设置为4，那么就是一个协调线程，加3个工作线程，工作方式为生产者-消费者。工作队列长度为buffer pool instance的个数，使用一个全局slot数组表示。
+page跟block什么关系？
+block
+/** The buffer control block structure */
 
-协调线程在决定了需要flush的page数和lsn_limit后，会设置slot数组，将其中每个slot的状态设置为PAGE_CLEANER_STATE_REQUESTED, 并设置目标page数及lsn_limit，然后唤醒工作线程 (pc_request)
+struct buf_block_t
 
-工作线程被唤醒后，从slot数组中取一个未被占用的slot，修改其状态，表示已被调度，然后对该slot所对应的buffer pool instance进行操作。直到所有的slot都被消费完后，才进入下一轮。通过这种方式，多个page cleaner线程实现了并发flush buffer pool，从而提升flush dirty page/lru的效率。
+buffer
+/** The common buffer control block structure
+for compressed and uncompressed frames */
 
-MySQL5.7的InnoDB flush策略优化
+/** Number of bits used for buffer page states. */
+#define BUF_PAGE_STATE_BITS 3
 
-在之前版本中，因为可能同时有多个线程操作buffer pool刷page （在刷脏时会释放buffer pool mutex），每次刷完一个page后需要回溯到链表尾部，使得扫描bp链表的时间复杂度最差为O（N*N）。
+class buf_page_t
 
-在5.6版本中针对Flush list的扫描做了一定的修复，使用一个指针来记录当前正在flush的page，待flush操作完成后，再看一下这个指针有没有被别的线程修改掉，如果被修改了，就回溯到链表尾部，否则无需回溯。但这个修复并不完整，在最差的情况下，时间复杂度依旧不理想。
-
-因此在5.7版本中对这个问题进行了彻底的修复，使用多个名为hazard pointer的指针，在需要扫描LIST时，存储下一个即将扫描的目标page，根据不同的目的分为几类：
-
-flush_hp: 用作批量刷FLUSH LIST
-lru_hp: 用作批量刷LRU LIST
-lru_scan_itr: 用于从LRU链表上驱逐一个可替换的page，总是从上一次扫描结束的位置开始，而不是LRU尾部
-single_scan_itr: 当buffer pool中没有空闲block时，用户线程会从FLUSH LIST上单独驱逐一个可替换的page 或者 flush一个脏页，总是从上一次扫描结束的位置开始，而不是LRU尾部。
-后两类的hp都是由用户线程在尝试获取空闲block时调用，只有在推进到某个buf_page_t::old被设置成true的page (大约从Lru链表尾部起至总长度的八分之三位置的page)时， 再将指针重置到Lru尾部。
-
-这些指针在初始化buffer pool时分配，每个buffer pool instance都拥有自己的hp指针。当某个线程对buffer pool中的page进行操作时，例如需要从LRU中移除Page时，如果当前的page被设置为hp，就要将hp更新为当前Page的前一个page。当完成当前page的flush操作后，直接使用hp中存储的page指针进行下一轮flush。
-
-社区优化
-
-一如既往的，Percona Server在5.6版本中针对buffer pool flush做了不少的优化，主要的修改包括如下几点：
-
-优化刷LRU流程buf_flush_LRU_tail 
-该函数由page cleaner线程调用。
-原生的逻辑：依次flush 每个buffer pool instance，每次扫描的深度通过参数innodb_lru_scan_depth来配置。而在每个instance内，又分成多个chunk来调用；
-修改后的逻辑为：每次flush一个buffer pool的LRU时，只刷一个chunk，然后再下一个instance，刷完所有instnace后，再回到前面再刷一个chunk。简而言之，把集中的flush操作进行了分散，其目的是分散压力，避免对某个instance的集中操作，给予其他线程更多访问buffer pool的机会。
-允许设定刷LRU/FLUSH LIST的超时时间，防止flush操作时间过长导致别的线程（例如尝试做single page flush的用户线程）stall住；当到达超时时间时,page cleaner线程退出flush。
-
-避免用户线程参与刷buffer pool 
-当用户线程参与刷buffer pool时，由于线程数的不可控，将产生严重的竞争开销，例如free list不足时做single page flush，以及在redo空间不足时，做dirty page flush，都会严重影响性能。Percona Server允许选择让page cleaner线程来做这些工作，用户线程只需要等待即可。出于效率考虑，用户还可以设置page cleaner线程的cpu调度优先级。 
-另外在Page cleaner线程经过优化后，可以知道系统当前处于同步刷新状态，可以去做更激烈的刷脏(furious flush)，用户线程参与到其中，可能只会起到反作用。
-允许设置page cleaner线程，purge线程，io线程，master线程的CPU调度优先级，并优先获得InnoDB的mutex。
-
-使用新的独立后台线程来刷buffer pool的LRU链表，将这部分工作负担从page cleaner线程剥离。 
-实际上就是直接转移刷LRU的代码到独立线程了。从之前Percona的版本来看，都是在不断的强化后台线程，让用户线程少参与到刷脏/checkpoint这类耗时操作中。
+page属于block block有lock控制
