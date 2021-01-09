@@ -1,0 +1,45 @@
+1在遇到网络问题的时候，组成员被剔除，每个成员的状态都变成额error状态。
+处理：在主节点上，停止复制，然后在启动复制，然后在每个节点上启动复制。
+
+2在启动组复制后，在日志中报错如下：
+Note] 'CHANGE MASTER TO FOR CHANNEL 'group_replication_recovery' executed'. Previous state master_host='hz-10-200-142-49.h.lmlc', master_port= 5700, master_log_file='', master_log_pos= 4, master_bind=''. New state master_host='hz-10-200-142-49.h.lmlc', master_port= 5700, master_log_file='', master_log_pos= 4, master_bind=''.
+There was an error when connecting to the donor server. Check group replication recovery's connection credentials
+
+
+需要在hosts中配置ip机器名的映射
+
+这种错误持续一段时间后，如果没有修正，那么
+[ERROR] Plugin group_replication reported: 'Maximum number of retries when trying to connect to a donor reached. Aborting group replication recovery.'
+2017-11-10T06:53:26.048224Z 42 [Note] Plugin group_replication reported: 'Terminating existing group replication donor connection and purging the corresponding logs.'
+2017-11-10T06:53:26.048261Z 45 [Note] Error reading relay log event for channel 'group_replication_recovery': slave SQL thread was killed
+
+
+组复制的slave被杀掉了，成员视图做了一次变更
+
+
+
+
+3在执行语句遇到冲突导致复制失败的情况下，server关闭复制，退出组，设置super_read_only=on，即使有super的用户也是只读的
+
+2017-11-10T07:07:38.916483Z 65 [ERROR] Slave SQL for channel 'group_replication_applier': Error 'Can't create database 'test'; database exists' on query. Default database: 'test'. Query: 'create database test', Error_code: 1007
+2017-11-10T07:07:38.916645Z 65 [Warning] Slave: Can't create database 'test'; database exists Error_code: 1007
+2017-11-10T07:07:38.916704Z 65 [ERROR] Error running query, slave SQL thread aborted. Fix the problem, and restart the slave SQL thread with "SLAVE START". We stopped at log 'FIRST' position 195
+2017-11-10T07:07:38.916822Z 65 [ERROR] Plugin group_replication reported: 'The applier thread execution was aborted. Unable to process more transactions, this member will now leave the group.'
+2017-11-10T07:07:38.916863Z 62 [ERROR] Plugin group_replication reported: 'Fatal error during execution on the Applier process of Group Replication. The server will now leave the group.'
+2017-11-10T07:07:38.917382Z 0 [Note] Plugin group_replication reported: 'getstart group_id 8127f1d'
+2017-11-10T07:07:38.918443Z 62 [ERROR] Plugin group_replication reported: 'The server was automatically set into read only mode after an error was detected.'
+
+处理办法：
+停止组复制
+调整从库的数据
+开启组复制
+
+
+
+
+节点延时问题，如果监控延时？
+
+如果一个节点的延时太久了，会触发流控，那么整个组的速度都会被降下来。
+
+
+主库没有test,从库上有test,在主库上创建test

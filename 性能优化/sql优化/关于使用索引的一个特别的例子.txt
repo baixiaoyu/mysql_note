@@ -1,0 +1,33 @@
+之前的概念都是字段中存在索引列，sql才会使用这个字段上的索引，但是下面的这个例子完全颠覆了我对mysql的认知。
+这个例子中用了跟sql完全无关的emp_key，仔细的分析下，其实这个索引的叶节点上保存有主键的信息，所以在索引的叶子上可以过滤统计数据。而对于存在的主键索引，如果你是走主键索引相当于是扫描了整个的表。效率上不如走索引好，这个相当于是oracle中的全索引扫描。
+
+
+| titles | CREATE TABLE `titles` (
+  `emp_no` int(11) NOT NULL,
+  `title` varchar(50) NOT NULL,
+  `from_date` date NOT NULL,
+  `to_date` date DEFAULT NULL,
+  PRIMARY KEY (`emp_no`,`title`,`from_date`),
+  KEY `emp_key` (`emp_no`),
+  CONSTRAINT `titles_ibfk_1` FOREIGN KEY (`emp_no`) REFERENCES `employees` (`emp_no`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.00 sec)
+
+mysql>  explain select distinct title from titles where year(from_date) > '1990'\G;
+*************************** 1. row ***************************
+           id: 1
+  select_type: SIMPLE
+        table: titles
+         type: index
+possible_keys: PRIMARY,emp_key
+          key: emp_key
+      key_len: 4
+          ref: NULL
+         rows: 442426
+        Extra: Using where; Using index; Using temporary
+1 row in set (0.00 sec)
+
+ERROR: 
+No query specified
+

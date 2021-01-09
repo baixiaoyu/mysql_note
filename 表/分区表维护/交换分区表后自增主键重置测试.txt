@@ -1,0 +1,140 @@
+mysql> CREATE TABLE e (
+    ->     id INT NOT NULL primary key not null auto_increment,
+    ->     fname VARCHAR(30),
+    ->     lname VARCHAR(30)
+    -> )
+    ->     PARTITION BY RANGE (id) (
+    ->         PARTITION p0 VALUES LESS THAN (50),
+    ->         PARTITION p1 VALUES LESS THAN (100),
+    ->         PARTITION p2 VALUES LESS THAN (150),
+    ->         PARTITION p3 VALUES LESS THAN (MAXVALUE)
+    -> );
+Query OK, 0 rows affected (0.06 sec)
+
+mysql> INSERT INTO e VALUES
+    ->     (1669, "Jim", "Smith"),
+    ->     (337, "Mary", "Jones"),
+    ->     (16, "Frank", "White"),
+    ->     (2005, "Linda", "Black");
+Query OK, 4 rows affected (0.00 sec)
+Records: 4  Duplicates: 0  Warnings: 0
+
+mysql> insert into e values(1,'aa','aa');
+Query OK, 1 row affected (0.00 sec)
+
+mysql> insert into e(fname,lname) values('bb','bb');
+Query OK, 1 row affected (0.00 sec)
+
+mysql> select * from e;
++------+-------+-------+
+| id   | fname | lname |
++------+-------+-------+
+|    1 | aa    | aa    |
+|   16 | Frank | White |
+|  337 | Mary  | Jones |
+| 1669 | Jim   | Smith |
+| 2005 | Linda | Black |
+| 2006 | bb    | bb    |
++------+-------+-------+
+6 rows in set (0.01 sec)
+
+mysql> create table e2 like e;
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> alter table e2 remove partitioning;
+Query OK, 0 rows affected (0.02 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+
+mysql> select PARTITION_NAME, TABLE_ROWS FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_NAME = 'e';
++----------------+------------+
+| PARTITION_NAME | TABLE_ROWS |
++----------------+------------+
+| p0             |          2 |
+| p1             |          0 |
+| p2             |          0 |
+| p3             |          4 |
++----------------+------------+
+4 rows in set (0.00 sec)
+
+mysql> alter table e exchange partition p0 with table e2;
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> select * from e;
++------+-------+-------+
+| id   | fname | lname |
++------+-------+-------+
+|  337 | Mary  | Jones |
+| 1669 | Jim   | Smith |
+| 2005 | Linda | Black |
+| 2006 | bb    | bb    |
++------+-------+-------+
+4 rows in set (0.00 sec)
+
+mysql> select * from e2;
++----+-------+-------+
+| id | fname | lname |
++----+-------+-------+
+|  1 | aa    | aa    |
+| 16 | Frank | White |
++----+-------+-------+
+2 rows in set (0.00 sec)
+
+mysql> insert into e2(fname,lname) values('ccc','cc');
+Query OK, 1 row affected (0.00 sec)
+
+mysql> select * from e2;
++----+-------+-------+
+| id | fname | lname |
++----+-------+-------+
+|  1 | aa    | aa    |
+| 16 | Frank | White |
+| 17 | ccc   | cc    |
++----+-------+-------+
+3 rows in set (0.00 sec)
+
+mysql> select * from e;
++------+-------+-------+
+| id   | fname | lname |
++------+-------+-------+
+|  337 | Mary  | Jones |
+| 1669 | Jim   | Smith |
+| 2005 | Linda | Black |
+| 2006 | bb    | bb    |
++------+-------+-------+
+4 rows in set (0.00 sec)
+
+mysql> insert into e (fname,lname) values('dd','dd');
+Query OK, 1 row affected (0.00 sec)
+
+mysql> select * from e;
++------+-------+-------+
+| id   | fname | lname |
++------+-------+-------+
+|  337 | Mary  | Jones |
+| 1669 | Jim   | Smith |
+| 2005 | Linda | Black |
+| 2006 | bb    | bb    |
+| 2007 | dd    | dd    |
++------+-------+-------+
+5 rows in set (0.01 sec)
+
+mysql> create table e3 like e2;
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> alter table e exchange partition p3 with table e3;
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> select * from e;
+Empty set (0.00 sec)
+
+mysql> insert into e(fname,lname) values('ee','ee');
+Query OK, 1 row affected (0.00 sec)
+
+mysql> select * from e;
++----+-------+-------+
+| id | fname | lname |
++----+-------+-------+
+|  1 | ee    | ee    |
++----+-------+-------+
+1 row in set (0.00 sec)
+

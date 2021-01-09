@@ -1,0 +1,7 @@
+mysqldiff --server1=user@host1 --server2=user@host2 testdb.table1anotherdb.anothertable
+
+对比2个表结构的不同之处
+
+使用--force，检查所有的不同
+使用--difftype=sql打印sql，需要注意输出的sql可能有问题，不要直接执行
+# mysqldiff --force --difftype=sql --server1=root:msandbox@127.0.0.1:21489 --server2=root:msandbox@127.0.0.1:21490 employees:employees

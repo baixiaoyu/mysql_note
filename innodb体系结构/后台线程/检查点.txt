@@ -1,0 +1,40 @@
+在InnoDB存储引擎内部，有两种Checkpoint，分别为：Sharp Checkpoint、Fuzzy Checkpoint
+
+Sharp Checkpoint 发生在数据库关闭时将所有的脏页都刷新回磁盘，这是默认的工作方式，即参数innodb_fast_shutdown=1。但是若数据库在运行时也使用Sharp Checkpoint，那么数据库的可用性就会受到很大的影响。故在InnoDB存储引擎内部使用Fuzzy Checkpoint进行页的刷新，即只刷新一部分脏页，而不是刷新所有的脏页回磁盘
+
+
+Fuzzy Checkpoint：1、Master Thread Checkpoint；2、FLUSH_LRU_LIST Checkpoint；3、Async/Sync Flush Checkpoint；4、Dirty Page too much Checkpoint
+
+FLUSH_LRU_LIST Checkpoint
+
+因为InnoDB存储引擎需要保证LRU列表中需要有差不多100个空闲页可供使用。在InnoDB1.1.x版本之前，需要检查LRU列表中是否有足够的可用空间操作发生在用户查询线程中，显然这会阻塞用户的查询操作。倘若没有100个可用空闲页，那么InnoDB存储引擎会将LRU列表尾端的页移除。如果这些页中有脏页，那么需要进行Checkpoint，而这些页是来自LRU列表的，因此称为FLUSH_LRU_LIST Checkpoint。
+
+而从MySQL 5.6版本，也就是InnoDB1.2.x版本开始，这个检查被放在了一个单独的Page Cleaner线程中进行，并且用户可以通过参数innodb_lru_scan_depth控制LRU列表中可用页的数量，该值默认为1024，
+
+Async/Sync Flush Checkpoint
+
+指的是重做日志文件不可用的情况，这时需要强制将一些页刷新回磁盘，而此时脏页是从脏页列表中选取的
+Dirty Page too much
+
+即脏页的数量太多，导致InnoDB存储引擎强制进行Checkpoint。其目的总的来说还是为了保证缓冲池中有足够可用的页。其可由参数innodb_max_dirty_pages_pct控制：
+innodb使用了fuzzy检查点的机制，InnoDB小批量地从缓冲池中刷新修改后的数据库页面。 无需在单个批处理中刷新缓冲池，这将在检查点过程中中断用户SQL语句的处理。
+
+
+
+A technique that flushes small batches of dirty pages from the buffer pool, rather than flushing all dirty pages at once which would disrupt database processing.
+
+During crash recovery, InnoDB looks for a checkpoint label written to the log files. It knows that all modifications to the database before the label are present in the disk image of the database. Then InnoDB scans the log files forward from the checkpoint, applying the logged modifications to the database
+
+恢复的过程倒是一样的，在logfile中找检查点，开始应用检查点后面的日志。
+
+因此Checkpoint（检查点）技术就诞生了，目的是解决以下几个问题：1、缩短数据库的恢复时间；2、缓冲池不够用时，将脏页刷新到磁盘；3、重做日志不可用时，刷新脏页。
+
+当数据库发生宕机时，数据库不需要重做所有的日志，因为Checkpoint之前的页都已经刷新回磁盘。数据库只需对Checkpoint后的重做日志进行恢复，这样就大大缩短了恢复的时间。
+
+当缓冲池不够用时，根据LRU算法会溢出最近最少使用的页，若此页为脏页，那么需要强制执行Checkpoint，将脏页也就是页的新版本刷回磁盘。
+
+当重做日志出现不可用时，因为当前事务数据库系统对重做日志的设计都是循环使用的，并不是让其无限增大的，重做日志可以被重用的部分是指这些重做日志已经不再需要，当数据库发生宕机时，数据库恢复操作不需要这部分的重做日志，因此这部分就可以被覆盖重用。如果重做日志还需要使用，那么必须强制Checkpoint，将缓冲池中的页至少刷新到当前重做日志的位置，缓冲池中的lsn慢与redo中的当前lsn，当redo循环覆盖的时候，如果redo中的lsn还需要恢复，不能覆盖，这个时候触发下检查点，刷新下缓存，这样redo中的内容就不被需要了，可以覆盖了。
+
+
+
+

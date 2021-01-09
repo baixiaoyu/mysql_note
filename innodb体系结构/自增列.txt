@@ -1,0 +1,7 @@
+Q: What¡¯s the best way to handle auto_increment?
+
+A: Follow the advice in the user manual: set auto_increment_offset  to a unique value on each of servers, auto_increment_increment  to the number of servers and never update auto-incremented columns manually
+
+https://dev.mysql.com/doc/refman/5.7/en/replication-options-master.html#sysvar_auto_increment_increment
+
+

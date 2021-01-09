@@ -1,0 +1,1 @@
+ tcpflow -c -p -i any dst port 3333 | grep -i -E "select|insert|update|delete|replace|create|delete" | sed 's%\(.*\)\([.]\{4\}\)\(.*\)%\3%' 

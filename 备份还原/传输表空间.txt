@@ -1,0 +1,53 @@
+https://www.percona.com/blog/2013/11/05/how-to-recover-an-orphaned-ibd-file-with-mysql-5-6/
+上面的这篇文章中也是用了传输表空间的方式来进行的恢复。
+主要的思路就是在新的实例上创建与损坏实例的表结构一样的空表，然后将ibd文件直接拷贝到新实例的目录下，检查权限，重启，在执行discard tablespace import tablespace。然后即可。这样说明了为什么获取表的建表语句是很关键的
+
+需要注意的是，5.6实例拷贝到5.7上的时候，会遇到
+ERROR 1808 (HY000): Schema mismatch (Table has ROW_TYPE_DYNAMIC row format, .ibd file has ROW_TYPE_COMPACT row format
+这个错误，主要的原因就是，5.6与5.7版本的行格式的默认值不同，需要在新实例建表的时候指定表的行格式。
+
+
+传输表空间的最佳实践
+https://www.percona.com/blog/2014/12/09/mysql-5-6-transportable-tablespaces-best-practices/
+
+
+Run FLUSH TABLES FOR EXPORT on the source server to ensure all table changes flushed to the disk. It will block write transactions to the named table while only allowing read-only operations. This can be a problem on high-write workload systems as a table can be blocked for a longer period of time if your table is huge in size. While making backups with Percona XtraBackup you can manage this in a non-blocking way and it will also save binary log coordinates that can be useful in replication and disaster recovery scenario.
+
+FLUSH TABLES FOR EXPORT is only applicable to Oracle MySQL 5.6/Percona Server 5.6 FLUSH TABLES FOR EXPORT and will produce table metadata file .cfg and tablespace file .ibd. Make sure you copy both table.cfg and table.ibd files before releasing lock. It’s worth mentioning that you shouldn’t logout from the mysql server before copying table cfg and table.ibd file otherwise it will release the lock. After copying table metadata file (.cfg) and tablespace (.ibd) file release the lock on source server.
+
+
+
+测试如下：
+5.7上新建表
+
+mysql> CREATE TABLE `bai_test` (
+    ->   `id` int(11) NOT NULL AUTO_INCREMENT,
+    ->   `code` varchar(40) NOT NULL,
+    ->   `createtime` datetime NOT NULL,
+    ->   PRIMARY KEY (`id`),
+    ->   KEY `idx_code_date` (`code`,`createtime`)
+    -> ) ENGINE=InnoDB AUTO_INCREMENT=5201 DEFAULT CHARSET=utf8 row_format=compact;--此处注意要指定行格式。
+
+
+拷贝ibd文件直接覆盖
+cp /data/mysql_3333/test/bai_test.ibd /data/mysql_8888/test
+
+重启5.7实例
+
+ERROR 1812 (HY000): Tablespace is missing for table `test`.`bai_test`.
+mysql> alter table bai_test discard tablespace;
+Query OK, 0 rows affected, 2 warnings (0.00 sec)
+
+mysql> alter table bai_test import tablespace;
+Query OK, 0 rows affected, 1 warning (0.02 sec)
+
+mysql> select count(*) from bai_test;
++----------+
+| count(*) |
++----------+
+|     2600 |
++----------+
+1 row in set (0.00 sec)
+
+对于分区表的使用，5.6上是一个个的倒回去，5.7上是可以将分区表视为一个表整体的import
+https://www.percona.com/blog/2014/10/14/recover-orphaned-innodb-partition-tablespaces-in-mysql/

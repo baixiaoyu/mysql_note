@@ -1,0 +1,1 @@
+https://www.percona.com/blog/2012/12/14/the-optimization-that-often-isnt-index-merge-intersection/

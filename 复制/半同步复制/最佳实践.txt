@@ -1,0 +1,5 @@
+当然实际操作中还是不建议把参数rpl_semi_sync_master_enabled 和rpl_semi_sync_slave_enabled 直接写入配置文件的。
+原因：把参数加入my.cnf配置文件时，在slave库挂掉，重新开启slave库或者是slave库重启后，会自动开启增强半同步复制。
+如果在slave库断开master库时间较长时，最好是先开启mysql异步复制，让slave库追赶上master库后，然后再开启增强半同步复制。这样不会拖垮master库。要是直接开启增强半同步复制是会拖垮主库的。
+rpl_semi_sync_master_timeout =1000 ##1s 这个转化为异步复制的超时参数是可以写入配置文件的。
+

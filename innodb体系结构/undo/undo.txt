@@ -1,0 +1,69 @@
+关于回滚段的，只有这个主要的参数，用来设置多少个rollback segment。
+mysql> show global variables like '%rollback_segment%';
++----------------------------+-------+
+| Variable_name              | Value |
++----------------------------+-------+
+| innodb_rollback_segments   | 128   |
++----------------------------+-------+
+MySQL 5.6的版本上 
+InnoDB undo支持独立表空间， 增加如下参数：
++-------------------------+-------+
+| Variable_name           | Value |
++-------------------------+-------+
+| innodb_undo_directory   | .     |
+| innodb_undo_logs        | 128   |
+| innodb_undo_tablespaces | 1     |
++-------------------------+-------+
+这样，在install的时候，就会在data目录下增加undo数据文件，来组成undo独立表空间，但文件变大之后的空间回收还是成为问题。
+
+MySQL 5.7的版本上 
+InnoDB undo在支持独立表空间的基础上，支持表空间的truncate功能，增加了如下参数：
+mysql> show global variables like '%undo%';                                                                                 +--------------------------+------------+
+| Variable_name            | Value      |
++--------------------------+------------+
+| innodb_max_undo_log_size | 1073741824 |
+| innodb_undo_directory    | ./         |
+| innodb_undo_log_truncate | OFF        |
+| innodb_undo_logs         | 128        |
+| innodb_undo_tablespaces  | 3          |
++--------------------------+------------+
+mysql> show global variables like '%truncate%';
++--------------------------------------+-------+
+| Variable_name                        | Value |
++--------------------------------------+-------+
+| innodb_purge_rseg_truncate_frequency | 128   |
+| innodb_undo_log_truncate             | OFF   |
++--------------------------------------+-------+
+
+InnoDB的purge线程，会根据innodb_undo_log_truncate开关的设置，和innodb_max_undo_log_size设置的文件大小阈值，以及truncate的频率来进行空间回收和rollback segment的重新初始化。
+
+设置innodb_undo_tablespaces的个数， 在mysql install的时候，创建指定数量的表空间。 
+InnoDB支持128个undo logs，这里特别说明下，从5.7开始，innodb_rollback_segments的名字改成了innodb_undo_logs，但表示的都是回滚段的个数。 
+从5.7.2开始，其中32个undo logs为临时表的事务分配的，因为这部分undo不记录redo，不需要recovery，另外从33-128一共96个是redo-enabled undo。
+rollback segment的分配如下：
+
+Slot-0: reserved for system-tablespace.
+Slot-1....Slot-N: reserved for temp-tablespace.
+Slot-N+1....Slot-127: reserved for system/undo-tablespace. */
+其中如果是临时表的事务，需要分配两个undo logs，其中一个是non-redo undo logs；这部分用于临时表数据的回滚。
+另外一个是redo-enabled undo log，是为临时表的元数据准备的，需要recovery。
+而且， 其中32个rollback segment创建在临时表空间中，并且临时表空间中的回滚段在每次server start的时候，需要重建。
+
+每一个rollback segment可以分配1024个slot，也就是可以支持96*1024个并发的事务同时， 但如果是临时表的事务，需要占用两个slot。
+
+undo truncate
+undo的truncate主要由下面两个参数控制：innodb_purge_rseg_truncate_frequency，innodb_undo_log_truncate。 
+1. innodb_undo_log_truncate是开关参数。 
+2. innodb_purge_rseg_truncate_frequency默认128，表示purge undo轮询128次后，进行一次undo的truncate。
+当设置innodb_undo_log_truncate=ON的时候， undo表空间的文件大小，如果超过了innodb_max_undo_log_size， 就会被truncate到初始大小，但有一个前提，就是表空间中的undo不再被使用。
+
+
+
+https://www.kancloud.cn/taobaomysql/monthly/181766
+
+mysql中的undo分为insert undo和 update undo
+
+insert的undo在事务提交后，就直接删除了，因为不会被别的事务所需要，不管是在什么事务隔离级别下，都是这样。
+
+
+在show engine innodb的输出中，History list length显示的是undo的数量

@@ -1,0 +1,3 @@
+https://www.percona.com/blog/2014/11/12/log-rotate-and-the-deleted-mysql-log-file-mystery/
+
+https://www.percona.com/blog/2013/04/18/rotating-mysql-slow-logs-safely/

@@ -1,0 +1,24 @@
+https://yq.aliyun.com/articles/57731
+https://www.kancloud.cn/taobaomysql/monthly/117963
+
+这个链接是使用innobackupex基于从库搭建mysql主从架构
+http://blog.csdn.net/leshami/article/details/45530461
+
+gtid错误汇总
+http://blog.csdn.net/leshami/article/details/52778480
+
+
+gtid 线上由非gtid切换到gtid引发的问题：
+http://www.actionsky.com/binlog-rotate%E5%BC%95%E5%8F%91%E7%9A%84mysql%E9%98%BB%E5%A1%9E%E4%BA%8B%E4%BB%B6/
+
+如何避免
+最好是创建数据库时直接启用GTID，GTID的好处谁用谁知道；
+
+当MySQL由非GTID模式升级为开启GTID时：
+
+1. 设置参数binlog_gtid_simple_recovery=true；
+
+2. 重启MySQL后，备份binlog，执行reset master；
+
+3. 运行后不要切换GTID模式，以免造成GTID的紊乱。
+

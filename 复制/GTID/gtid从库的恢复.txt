@@ -1,0 +1,5 @@
+https://www.percona.com/blog/2013/02/08/how-to-createrestore-a-slave-using-gtid-replication-in-mysql-5-6/
+
+
+
+从库需要重新导入数据同步的时候，需要reset master在导入数据，我的测试在csdn上了

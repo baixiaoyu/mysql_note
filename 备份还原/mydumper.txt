@@ -1,0 +1,14 @@
+mysqldumper不支持json类型
+备份指定库到指定目录
+mydumper -u root  -S /tmp/mysql_8888.sock -B tpcc1000 -p xx -o /data/tpcc1000
+11:08开始的备份11:18结束，10分钟备份130g
+
+-t指定并行度，默认是4
+
+myloader开始恢复时间12:03，看服务器资源共用，并发线程设置一定要设置比表的数量多，每个线程处理一个表，所以恢复的速度基本上取决于最大的那个表。
+恢复了130G的数据用了3个小时。
+
+myloader -u root -S /tmp/mysql_3334.sock -B tpcc1000 -p xx -d /data/tpcc1000 -o -t 8 -v 3
+
+myloader快速加载数据的一个分支
+https://www.percona.com/blog/2015/01/21/importing-big-tables-large-indexes-myloader/

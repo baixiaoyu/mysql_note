@@ -1,0 +1,33 @@
+rc级别下的无索引删除测试
+
+session1：
+mysql> create table bai(id int primary key not null auto_increment ,name varchar(10));
+Query OK, 0 rows affected (0.05 sec)
+
+mysql> insert into bai values(1,'a');
+Query OK, 1 row affected (0.00 sec)
+
+mysql> insert into bai values(2,'b');
+Query OK, 1 row affected (0.01 sec)
+
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> delete from bai where name='a';
+Query OK, 1 row affected (0.00 sec)
+
+
+然后在第二个会话上执行删除b的操作
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> delete from bai where name='b';
+
+此时，b处于等待状态，如果在第二个会话中执行插入操作，那么是可以执行的。
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> insert into bai values(3,'cc');
+Query OK, 1 row affected (0.00 sec)
+
+由此看出，不是全表的锁，但是也不是行锁，网络上说的mysql server会优化，释放掉不匹配的行的锁，这个看来也不准确。

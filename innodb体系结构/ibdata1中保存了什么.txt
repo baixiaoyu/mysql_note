@@ -1,0 +1,16 @@
+When you have innodb_file_per_table enabled, the tables are stored in their own tablespace but the shared tablespace is still used to store other InnoDB’s internal data:
+
+data dictionary aka metadata of InnoDB tables
+change buffer
+doublewrite buffer
+undo logs
+
+查看ibdata1中的内容
+
+innodb_space -f /var/lib/mysql/ibdata1 space-summary | grep UNDO_LOG | wc -l
+
+这个文件在扩展后，就不会被回收了，所以要进行监控，避免出现长时间事务导致文件变大，即使事务被kill后也是无法收缩的。
+
+为什么ibdata1一直在不停的增长：
+https://www.percona.com/blog/2013/08/20/why-is-the-ibdata1-file-continuously-growing-in-mysql/
+线上5.7遇到过大事务导致的磁盘告警，重启实例后，文件大小回收了。

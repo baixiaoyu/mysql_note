@@ -1,0 +1,37 @@
+pt-diskstats –interval=2 
+进入输出界面后，按？查看快捷键有哪些
+
+输出字段 
+rd_s：每秒的平均读次数。
+
+rd_avkb 读的平均的大小，k为单位 
+rd_mb_s 每秒读的数量 m为单位
+
+rd_mrg 在队列调度器中被合并的读请求的百分比
+
+rd_cnc 读取操作的平均并发度 
+rd_rt 读操作的平均响应时间,端到端的响应时间，包含队列的时间。
+
+If rd_mrg/wr_mrg is high% then the IO workload is sequential on the other hand, If rd_mrg/wr_mrg is a low% then IO workload is all random. Binary logs, redo logs (aka ib_logfile*), undo log and doublewrite buffer all need sequential writes.
+
+
+busy 这个对应的是iostat的util
+
+in_prg 
+进程中的请求数量 
+ios_s 物理设备的平均吞吐，iops，是rd_s和wr_s的总和
+
+qtime 
+平均队列时间，就是在设备的调度队列中在发往物理设备之前的时间。 
+stime 平均服务时间，物理设备处理请求的时间，不包含队里的时间，是读和写的平均。这个值不准确，被废弃了。
+
+关于util的解释及如何确定系统的iops
+The busy percentage is only telling us for how long the IO subsystem was busy, but is not indicating capacity. So the only time you care about %busy is when it’s 100% and at the same time latency (await in iostat and rd_rt/wr_rt in diskstats output) increases over -say- 5ms. You can estimate capacity of your IO subsystem and then look at the IOPS being consumed (r/s + w/s columns). Also, the system can process more than one request in parallel (in case of RAID) so %busy can go beyond 100% in pt-diskstats output.
+
+If you need to check disk throughput, block device IOPS run the following to capture metrics from your IO subsystem and see if utilization matches other worrisome symptoms. I would suggest capturing disk stats during peak load. Output can be grouped by sample or by disk using the –group-by option. You can use the sysbench benchmark tool for this purpose to measure database server performance. You will find this link useful for sysbench tool details.
+
+
+
+
+$ pt-diskstats --group-by=all --iterations=7200 > /tmp/pt-diskstats.out;
+

@@ -1,0 +1,10 @@
+zfs是事务型的文件系统，所以使用zfs文件系统的mysql可以将双写关闭，ext4配置了data=journal后也是事务型的了，可以关闭双写。
+关于关闭双写后的性能提升，其实也是针对大量的写的情况下有性能提升表现的
+https://www.percona.com/blog/2014/05/23/improve-innodb-performance-write-bound-loads/
+
+https://www.percona.com/blog/2015/06/17/update-on-the-innodb-double-write-buffer-and-ext4-transactions/
+
+需要使用3.2版本以后的内核，他的测试中提到了是数据全部在buffer中能放下，我认为数据不能完全在buffer中放下也会有很大的性能提升才对的。
+
+对于支持原子写的硬件存储，5,7在使用的时候回自动禁止双写。
+

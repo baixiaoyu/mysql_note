@@ -1,0 +1,2 @@
+https://www.percona.com/blog/2016/05/03/best-practices-for-configuring-optimal-mysql-memory-usage/
+

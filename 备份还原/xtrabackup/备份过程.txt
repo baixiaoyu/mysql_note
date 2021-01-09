@@ -1,0 +1,7 @@
+拷贝 InnoDB redo log，这是一个单独的线程在拷，直到备份结束；
+拷贝所有InnoDB ibd文件；
+加全局读锁，执行 FLUSH TABLES WITH READ LOCK(FTWRL);
+拷贝 frm、MYD、MYI 等文件；
+获取位点信息，执行 show slave status 和 show master status；
+解锁，UNLOCK TABLES;
+做一些收尾处理，备份结束。

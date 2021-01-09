@@ -1,0 +1,14 @@
+binlog_checksum:当配置的CRC32的时候，master会对binlog中的每一个事件写一个校验，如果设置成了NONE，只会通过事件的长度去校验。
+
+修改这个值会导致日志的轮转。
+
+
+innodb_checksums这个设置是对所有的表空间文件进行校验的。
+
+master_verify_checksum：这个参数会导致master在读取binlog的时候检查校验和，默认是disable的，也是通过事件的长度来进行验证。
+
+slave_sql_verify_checksum这个参数是设置的sql线程在读取relay log的时候使用校验和验证数据。如果事件不匹配，slave会报错并停止。
+
+
+在由于文件错误导致出错的时候，需要使用mysqlbinlog verify-binlog-checksum选项进行检查binlog文件。
+

@@ -1,0 +1,5 @@
+show processlist会产生mutex，导致连接被阻塞，所以在很忙的系统上是不能使用这个命令的，可以查看performance_schema.threads视图来看当前的线程，不会产生锁
+
+http://www.markleith.co.uk/2012/07/13/monitoring-processes-with-performance-schema-in-mysql-5-6/
+
+里面有个ps_helper工具能用来查看

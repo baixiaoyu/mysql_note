@@ -1,0 +1,29 @@
+1查看当前正在写入的是哪个二进制文件
+show master status;
+2slave的命令
+
+
+stop slave ;set global sql_slave_skip_counter=1; start slave ; show slave status\G;
+show all slaves stauts\G;
+3flush logs;强制轮换二进制日志，在操作系统上会看到产生一个新的日志文件
+4查看二进制日志中有哪些事件
+show binlog events\G;
+5 重置slave，需要先停止slave，这个动作会清除掉应用日志文件，注意重置后应用日志可能有创建表的动作，如果在重置后，没有删除表，
+那么在start salve后，会有报错，提示表已经存在，并且重置后，会有很多的relay文件
+reset slave
+6reset master重置master，需要确保没有slave连接到这个master上，会清除掉所有二进制文件及索引文件
+7查看master有哪些slave在连接着
+show slave hosts;
+
+stop all slaves;
+启动slave，并在指定的位置停止
+start slave until master_log_file='master-bin.000098', master_log_pos=7833;
+
+
+清理relay log
+ set global relay_log_purge=1;
+
+ flush logs;/* SQL线程会自动清理多余的Relay_Log_File */
+
+ set global relay_log_purge=0;
+

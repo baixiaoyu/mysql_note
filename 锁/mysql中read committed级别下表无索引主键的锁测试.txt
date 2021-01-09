@@ -1,0 +1,57 @@
+`session 1: 
+MySQL> begin; 
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> delete from test where table_name=’COLUMNS’; 
+Query OK, 256 rows affected (0.07 sec)
+
+session 2: 
+mysql> begin 
+-> ; 
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> delete from test where table_name=’COLLATIONS’; 
+ERROR 1205 (HY000): Lock wait timeout exceeded; try restarting transaction 
+mysql> insert into test select * from test where table_name=’COLLATIONS’; 
+Query OK, 256 rows affected (0.05 sec) 
+Records: 256 Duplicates: 0 Warnings: 0
+
+mysql> delete from test where table_name=’COLLATIONS’; 
+ERROR 1205 (HY000): Lock wait timeout exceeded; try restarting transaction 
+mysql> begin; 
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> insert into test select * from test where table_name=’COLLATIONS’; 
+Query OK, 512 rows affected (0.07 sec) 
+Records: 512 Duplicates: 0 Warnings: 0
+
+我们看到，session2的delete语句是删除不同的行，但是被阻塞了，session2中的insert是没有受影响的，这个时候其实添加的并不是表锁，是对所有的记录加了x记录锁。下面的视图可以看出是x的record锁 
+mysql> select * from information_schema.innodb_locks\G 
+***************** 1. row ***************** 
+lock_id: 17968:179:3:3 
+lock_trx_id: 17968 
+lock_mode: X 
+lock_type: RECORD 
+lock_table: test.test 
+lock_index: GEN_CLUST_INDEX 
+lock_space: 179 
+lock_page: 3 
+lock_rec: 3 
+lock_data: 0x0000008F4103 
+***************** 2. row ***************** 
+lock_id: 17967:179:3:3 
+lock_trx_id: 17967 
+lock_mode: X 
+lock_type: RECORD 
+lock_table: test.test 
+lock_index: GEN_CLUST_INDEX 
+lock_space: 179 
+lock_page: 3 
+lock_rec: 3 
+lock_data: 0x0000008F4103 
+2 rows in set (0.00 sec)
+
+但是在session2中执行update其他记录的语句，反而没有被阻塞，在何登成的博客中提到了“若id列上没有索引，SQL会走聚簇索引的全扫描进行过滤，由于过滤是由MySQL Server层面进行的。因此每条记录，无论是否满足条件，都会被加上X锁。但是，为了效率考量，MySQL做了优化，对于不满足条件的记录，会在判断后放锁，最终持有的，是满足条件的记录上的锁，但是不满足条件的记录上的加锁/放锁动作不会省略。同时，优化也违背了2PL的约束。” 
+看来mysql的优化也是分了不同类型的语句处理的。
+
+何登成博客的相关连接：http://hedengcheng.com/?p=771#_Toc374698315`

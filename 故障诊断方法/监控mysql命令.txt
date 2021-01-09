@@ -1,0 +1,11 @@
+show table [from db] status\G
+show engine engine_name logs;
+show engine engine_name status;
+show binlog events in log_file from pos limit offset row_count
+mysqladmin -h xx -P3308 status  总体健康状态的一个检查
+mysqladmin -h xx -P3308 extended-status --sleep 3 没3秒刷新一次状态变量值
+mysqladmin -h xxx -P3308 status processlist;
+mytop -u myadmin -px -d xx-P3308 -h xx
+show status like 'Innodb%log%'
+innodb fast shutdown可以快速关闭服务，不会影响数据一致性
+可以设置--innodb_print_all_deadlocks来记录所有的岁所信息到日志文件中

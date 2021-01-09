@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+# -*- coding:utf-8 -*-
+ 
+from pymysqlreplication import BinLogStreamReader
+ 
+# 链接数据库的参数 因为 pymysqlreplication 底层使用的是 python-mysql
+mysql_settings = {
+    'host': '19.xxx',
+    'port': 3306,
+    'user': 'HH',
+    'passwd': 'oracle'
+}
+ 
+# 这 pymysqlreplication 的 server_id 和从 Binlog 的什么位置开始解析
+stream = BinLogStreamReader(connection_settings=mysql_settings,
+                            server_id=100,
+                            blocking=True,
+                            log_file='mysql-bin.000012',
+                            log_pos=469)
+ 
+# 初始化订单统计数据
+order_count_total = 0
+order_amount_total = 0
+ 
+# 不停的解析 获取解析的 Binlog
+for binlogevent in stream:
+ 
+    # 碰到 WriteRowsEvent 并且 表是 ord_order 则进行统计
+    if binlogevent.event_type == 30 and binlogevent.table == 'ord_order':
+        binlogevent.dump() # 打印事件相关信息
+ 
+        # 同时计算出 订单数 和 金额数组, 如: [(1, 9), (1, 4)]
+        stat = [(1, row['values']['amount']) for row in binlogevent.rows]
+ 
+        # 分别获得 订单数数组如:[1, 1]。 销售额, 如: [9, 4]
+        order_count, order_amount = zip(*stat)
+        order_count_total += sum(order_count)
+        order_amount_total += sum(order_amount)
+ 
+        # 打印本次事件 产生的订单数和销售额
+        print 'order_count:', order_count
+        print 'order_amount:', order_amount
+ 
+        # 打印总的订单数和销售额
+        print 'order_count_total:', order_count_total
+        print 'order_amount_total:', order_amount_total

@@ -1,0 +1,43 @@
+1 threads_running:代表非sleeping状态的线程数量。
+2thread_cached:代表thread cache中的缓存的线程数量
+3 thread_connected:代表打开的连接的数量
+4 threads_created:代表为了处理连接的创建的线程的数量。如果这个值很大，需要调整thread_cache_size的大小。
+
+5 created_tmp_disk_tables 代表执行语句的时候在磁盘上创建的临时表的数量。如果一开始是在内存中创建的临时表，后面越来越大，那么mysql会自动的将它放置到磁盘上，最大的内存临时表的值是由tmp_table_size和max_head_table_size中的最小值决定的。如果这个值太大，你可以调整tmp_table_size 或max_head_table_size的值，根本的解决方法还是减少排序的数据量。
+
+6creaate_tmp_files：mysql创建的临时文件的数量
+7created_tmp_tables：mysql创建的临时表的数量
+
+
+8open_table_definitions:代表的是缓存的frm文件数量
+9open_tables :代表打开的表的数量
+10 opened_files：使用my_open()方法打开过的文件的数量。
+11 opend_table_definitions:代表缓存过的frm文件数量
+12 opend_tables:代表的是打开过的表的数量。如果这个数据值很大，代表的可能是table_open_cache设置的比较小。
+
+13 connections:代表的是mysql尝试打开的连接数量
+14 max_used_connections 代表服务启动后，同时打开的最大的连接。
+15 aborted_connects:连接到server上失败的次数
+
+16 slow_launch_threads 代表一个线程的创建时间大于slow_launch_time的时间
+17 sort_merge_passes 排序算法需要合并的次数，如果这个值很大，需要增大sort_buffer_size的参数设置
+
+
+18 innodb_available_undo_log这个是指定额innodb可用的回滚段的数量。
+ 
+19 Innodb_buffer_pool_bytes_data 代表的是buffer pool中的脏页和干净页的大小。
+20 innodb_buffer_pool_page_data 代表的是buffer pool中的脏页和干净页的页数。
+
+Innodb_buffer_pool_pages_dirty 脏页的数量
+Innodb_buffer_pool_pages_free 空闲页的数量
+Innodb_buffer_pool_pages_total 总的页数
+
+Innodb_buffer_pool_wait_free 当innodb需要读或创建页的时候，没有干净的页可用，就等待后台进程写一些脏页到磁盘上。如果innodb_buffer_pool_szie设置的合适，这个值应该是很小的。
+
+
+Innodb_log_waits log buffer太小，等待刷新的次数
+Innodb_num_open_files  innodb打开的文件数量
+
+
+
+

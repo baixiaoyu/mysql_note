@@ -1,0 +1,291 @@
+关于mysql分区表主键的选择测试：
+http://blog.csdn.net/aoerqileng/article/details/72675939
+
+分区表添加自增列的主键
+http://blog.csdn.net/aoerqileng/article/details/54342216
+
+分区介绍：
+http://blog.csdn.net/aoerqileng/article/details/51416851
+
+日期范围分区
+CREATE TABLE employees ( 
+id INT NOT NULL, 
+fname VARCHAR(30), 
+lname VARCHAR(30), 
+hired DATE NOT NULL DEFAULT ‘1970-01-01’, 
+separated DATE NOT NULL DEFAULT ‘9999-12-31’, 
+job_code INT, 
+store_id INT 
+) 
+PARTITION BY RANGE ( YEAR(separated) ) ( 
+PARTITION p0 VALUES LESS THAN (1991), 
+PARTITION p1 VALUES LESS THAN (1996), 
+PARTITION p2 VALUES LESS THAN (2001), 
+PARTITION p3 VALUES LESS THAN MAXVALUE 
+); 
+CREATE TABLE quarterly_report_status ( 
+report_id INT NOT NULL, 
+report_status VARCHAR(20) NOT NULL, 
+report_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP 
+) 
+PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) ( 
+PARTITION p0 VALUES LESS THAN ( UNIX_TIMESTAMP(‘2008-01-01 00:00:00’) ), 
+PARTITION p1 VALUES LESS THAN ( UNIX_TIMESTAMP(‘2008-04-01 00:00:00’) ), 
+PARTITION p2 VALUES LESS THAN ( UNIX_TIMESTAMP(‘2008-07-01 00:00:00’) ), 
+PARTITION p3 VALUES LESS THAN ( UNIX_TIMESTAMP(‘2008-10-01 00:00:00’) ), 
+PARTITION p4 VALUES LESS THAN ( UNIX_TIMESTAMP(‘2009-01-01 00:00:00’) ), 
+PARTITION p5 VALUES LESS THAN ( UNIX_TIMESTAMP(‘2009-04-01 00:00:00’) ), 
+PARTITION p6 VALUES LESS THAN ( UNIX_TIMESTAMP(‘2009-07-01 00:00:00’) ), 
+PARTITION p7 VALUES LESS THAN ( UNIX_TIMESTAMP(‘2009-10-01 00:00:00’) ), 
+PARTITION p8 VALUES LESS THAN ( UNIX_TIMESTAMP(‘2010-01-01 00:00:00’) ), 
+PARTITION p9 VALUES LESS THAN (MAXVALUE) 
+);
+CREATE TABLE members ( 
+firstname VARCHAR(25) NOT NULL, 
+lastname VARCHAR(25) NOT NULL, 
+username VARCHAR(16) NOT NULL, 
+email VARCHAR(35), 
+joined DATE NOT NULL 
+) 
+PARTITION BY RANGE COLUMNS(joined) ( 
+PARTITION p0 VALUES LESS THAN (‘1960-01-01’), 
+PARTITION p1 VALUES LESS THAN (‘1970-01-01’), 
+PARTITION p2 VALUES LESS THAN (‘1980-01-01’), 
+PARTITION p3 VALUES LESS THAN (‘1990-01-01’), 
+PARTITION p4 VALUES LESS THAN MAXVALUE 
+); 
+
+
+
+hash分区
+
+hash分区 
+CREATE TABLE employees ( 
+id INT NOT NULL, 
+fname VARCHAR(30), 
+lname VARCHAR(30), 
+hired DATE NOT NULL DEFAULT ‘1970-01-01’, 
+separated DATE NOT NULL DEFAULT ‘9999-12-31’, 
+job_code INT, 
+store_id INT 
+) 
+PARTITION BY HASH( YEAR(hired) ) 
+PARTITIONS 4; 
+
+查看分区表的数据量
+
+SELECT PARTITION_NAME, TABLE_ROWS FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_NAME = ‘e’; 
+ select partition_name,subpartition_name,table_rows from INFORMATION_SCHEMA.PARTITIONS where table_name='tb_urs_login_history';
+
+查看分区表的执行计划 ，关于分区表的执行计划，有一点需要注意的是，执行计划中的rows的值是表的全部的记录数，这个是跟普通表的不一样的地方。不是扫描的记录数
+EXPLAIN PARTITIONS select count(*) from xxx where create_time<’2016-12-02’;
+
+分区裁剪是自动做的，选择分区可以明确的指定要操作哪些分区 ，人为的指定分区
+SELECT * FROM employees PARTITION (p1); 
+SELECT store_id, COUNT(department_id) AS c FROM employees PARTITION (p1,p2,p3) GROUP BY store_id HAVING c > 4;–这些操作都是可以的 
+DELETE FROM employees PARTITION (p0, p1) WHERE fname LIKE ‘j%’; 
+UPDATE employees PARTITION (p0) SET store_id = 2 WHERE fname = ‘Jill’;
+
+
+管理列表和范围分区表
+
+删除分区，这种的分区上的数据也会直接删除，删除的行数不会被显示出来，影响的行数只会是0
+alter table trb1 drop partition p2;
+
+添加分区，这种的添加只能在后面添加，没有max分区的情况下
+ALTER TABLE members ADD PARTITION (PARTITION p3 VALUES LESS THAN (2010)); 
+添加最大分区
+alter table trb1 add partition (partition p5 values less than (maxvalue));
+
+分裂最大分区
+alter table trb1 reorganize partition p5 into( partition p6 values less than(50), partition p7 values less than(60), partition p8 values less than(70),partition p9 values less than maxvalue);
+
+
+如果想在前面的分区中添加分区，需要重新组织，重新组织这个命令不会删除数据，只会移动数据到新分区中，重新组织的分区必须是连续的分区，不能跨分区操作
+
+
+CREATE TABLE members (
+    id INT,
+    fname VARCHAR(25),
+    lname VARCHAR(25),
+    dob DATE
+)
+PARTITION BY RANGE( YEAR(dob) ) (
+    PARTITION p0 VALUES LESS THAN (1980),
+    PARTITION p1 VALUES LESS THAN (1990),
+    PARTITION p2 VALUES LESS THAN (2000)
+);
+
+
+ALTER TABLE members
+    REORGANIZE PARTITION p0 INTO (
+        PARTITION n0 VALUES LESS THAN (1970),
+        PARTITION n1 VALUES LESS THAN (1980)
+);
+
+合并2个分区
+ALTER TABLE members REORGANIZE PARTITION s0,s1 INTO (
+    PARTITION p0 VALUES LESS THAN (1970)
+);
+
+维护hash和key分区
+这2个分区不能删除分区，只能合并
+
+CREATE TABLE clients (
+    id INT,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    signed DATE
+)
+PARTITION BY HASH( MONTH(signed) )
+PARTITIONS 12;
+
+这个是指的减少4个分区，合并成8个分区
+ALTER TABLE clients COALESCE PARTITION 4;
+
+CREATE TABLE `clients` (
+  `id` int(11) DEFAULT NULL,
+  `fname` varchar(30) DEFAULT NULL,
+  `lname` varchar(30) DEFAULT NULL,
+  `signed` date DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+/*!50100 PARTITION BY HASH ( MONTH(signed))
+PARTITIONS 8 */ 
+
+
+将分区从12个添加到18个的语法
+ALTER TABLE clients ADD PARTITION PARTITIONS 6;
+
+
+
+
+repaire分区
+ALTER TABLE t1 REPAIR PARTITION p0,p1;
+
+check分区
+
+ALTER TABLE trb3 CHECK PARTITION p1;
+移除表的分区，这个只是移除表的分区定义，不会删除数据
+ALTER TABLE tablename
+REMOVE PARTITIONING ;
+
+
+子分区创建，第一个指定了子分区的名称及分区路径。第二个创建的时候没有指定
+CREATE TABLE tb_sub_ev (id INT, purchased DATE)
+    PARTITION BY RANGE( YEAR(purchased) )
+    SUBPARTITION BY HASH( TO_DAYS(purchased) ) (
+        PARTITION p0 VALUES LESS THAN (1990) (
+            SUBPARTITION s0,
+            SUBPARTITION s1
+        ),
+        PARTITION p1 VALUES LESS THAN (2000) (
+            SUBPARTITION s2,
+            SUBPARTITION s3
+        ),
+        PARTITION p2 VALUES LESS THAN MAXVALUE (
+            SUBPARTITION s4,
+            SUBPARTITION s5
+        )
+    );
+	
+	
+CREATE TABLE `tb_urs_login_history` (
+  `master_account_id` varchar(22) NOT NULL COMMENT '手机账号主账号',
+  `token_cookie` varchar(100) NOT NULL COMMENT '用户token或者cookie',
+  `status` varchar(7) NOT NULL COMMENT '状态，VALID|EXPIRED',
+  `channel` varchar(7) NOT NULL COMMENT '登录来源，ANDROID|IOS|PC|WAP',
+  `login_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '登录时间',
+  `login_ip` varchar(15) NOT NULL COMMENT '登录地址',
+  `device_type` varchar(30) DEFAULT NULL COMMENT '手机类型',
+  `system_type` varchar(30) DEFAULT NULL COMMENT '手机系统名称',
+  `system_version` varchar(30) DEFAULT NULL COMMENT '手机系统版本',
+  `resolution` varchar(30) DEFAULT NULL COMMENT '手机分辨率',
+  `unique_id` varchar(30) DEFAULT NULL COMMENT '手机分设备号',
+  `product_code` varchar(4) DEFAULT NULL COMMENT '登录的哪个产品',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
+  UNIQUE KEY `idx_login_account_time` (`master_account_id`,`login_time`),
+  KEY `idx_account_id_status` (`master_account_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+/*!50500 PARTITION BY RANGE  COLUMNS(login_time)
+SUBPARTITION BY KEY (master_account_id)
+SUBPARTITIONS 12
+(PARTITION p01 VALUES LESS THAN ('2017-08-01') ENGINE = InnoDB,
+ PARTITION p02 VALUES LESS THAN ('2017-11-01') ENGINE = InnoDB,
+ PARTITION p03 VALUES LESS THAN ('2018-02-01') ENGINE = InnoDB,
+ PARTITION p04 VALUES LESS THAN ('2018-05-01') ENGINE = InnoDB,
+ PARTITION p05 VALUES LESS THAN ('2018-08-01') ENGINE = InnoDB,
+ PARTITION p06 VALUES LESS THAN ('2018-11-01') ENGINE = InnoDB,
+ PARTITION p07 VALUES LESS THAN ('2019-02-01') ENGINE = InnoDB,
+ PARTITION p08 VALUES LESS THAN ('2019-05-01') ENGINE = InnoDB,
+ PARTITION p09 VALUES LESS THAN ('2019-08-01') ENGINE = InnoDB,
+ PARTITION p10 VALUES LESS THAN ('2019-11-01') ENGINE = InnoDB,
+ PARTITION p11 VALUES LESS THAN ('2020-02-01') ENGINE = InnoDB,
+ PARTITION p12 VALUES LESS THAN ('2020-05-01') ENGINE = InnoDB,
+ PARTITION p13 VALUES LESS THAN ('2020-08-01') ENGINE = InnoDB,
+ PARTITION p14 VALUES LESS THAN ('2020-11-01') ENGINE = InnoDB,
+ PARTITION p15 VALUES LESS THAN ('2021-02-01') ENGINE = InnoDB,
+ PARTITION p16 VALUES LESS THAN ('2021-05-01') ENGINE = InnoDB,
+ PARTITION p17 VALUES LESS THAN ('2021-08-01') ENGINE = InnoDB,
+ PARTITION p18 VALUES LESS THAN ('2021-11-01') ENGINE = InnoDB,
+ PARTITION p19 VALUES LESS THAN ('2022-02-01') ENGINE = InnoDB,
+ PARTITION p20 VALUES LESS THAN ('2022-05-01') ENGINE = InnoDB,
+ PARTITION p21 VALUES LESS THAN ('2022-08-01') ENGINE = InnoDB,
+ PARTITION p22 VALUES LESS THAN ('2022-11-01') ENGINE = InnoDB,
+ PARTITION p23 VALUES LESS THAN ('2023-02-01') ENGINE = InnoDB,
+ PARTITION p24 VALUES LESS THAN ('2023-05-01') ENGINE = InnoDB,
+ PARTITION p25 VALUES LESS THAN ('2023-08-01') ENGINE = InnoDB,
+ PARTITION p26 VALUES LESS THAN ('2023-11-01') ENGINE = InnoDB,
+ PARTITION p27 VALUES LESS THAN ('2024-02-01') ENGINE = InnoDB,
+ PARTITION p28 VALUES LESS THAN (MAXVALUE) ENGINE = InnoDB) */ |
+
+
+ 
+ 分区交换
+ https://dev.mysql.com/doc/refman/5.6/en/partitioning-management-exchange.html
+ 
+ 可以通过分区交换进行分区数据的归档备份，需要注意的是，交换的非分区表中不能有数据，否则数据就交换到分区表中了。
+ 
+ 这种方式使用的是ddl，速度快，可以看到1千6百万的记录，交换的方式非常快
+ 
+
+SELECT PARTITION_NAME, TABLE_ROWS FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_NAME = 'e';
+
+
+
+ CREATE TABLE e2 LIKE e;
+  ALTER TABLE e2 REMOVE PARTITIONING;
+  mysql> ALTER TABLE e EXCHANGE PARTITION p0 WITH TABLE e2;
+Query OK, 0 rows affected (0.02 sec)
+
+mysql> SELECT PARTITION_NAME, TABLE_ROWS FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_NAME = 'e';
++----------------+------------+
+| PARTITION_NAME | TABLE_ROWS |
++----------------+------------+
+| p0             |          0 |
+| p1             |          0 |
+| p2             |          0 |
+| p3             |   47892570 |
++----------------+------------+
+4 rows in set (0.00 sec)
+
+mysql> select count(*) from e2;
++----------+
+| count(*) |
++----------+
+| 16777216 |
++----------+
+1 row in set (9.05 sec)
+
+create table tb_collect_mobile_pv_p1703 like tb_collect_mobile_pv;
+alter table tb_collect_mobile_pv_p1703 remove partitioning;
+
+
+alter table tb_collect_mobile_pv exchange partition p1703 with table tb_collect_mobile_pv_p1703;
+  
+  
+  
+分区交换不验证
+语法： ALTER TABLE ... EXCHANGE PARTITION WITHOUT VALIDATION 
+如果不验证，那么只有元数据信息的更改，就可以完成exchange，否则，就需要读取每一行数据进行验证，维护时间将根据这个表大小有关系。
+
+

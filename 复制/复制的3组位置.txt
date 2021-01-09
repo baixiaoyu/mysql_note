@@ -1,0 +1,5 @@
+1) The position, ON THE MASTER, from which the I/O thread is reading: Master_Log_File/Read_Master_Log_Pos. -----相对于主库,从库读取主库的二进制日志的位置,是IO线程
+
+2) The position, IN THE RELAY LOGS, at which the SQL thread is executing: Relay_Log_File/Relay_Log_Pos ----相对于从库,是从库的sql线程执行到的位置
+
+3) The position, ON THE MASTER, at which the SQL thread is executing: Relay_Master_Log_File/Exec_Master_Log_Pos ----相对于主库,是从库的sql线程执行到的位置

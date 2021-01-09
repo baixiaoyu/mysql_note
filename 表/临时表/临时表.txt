@@ -1,0 +1,32 @@
+mysql的临时表是基于会话的，当前会话结束的时候，该临时表会自动关闭，在主库上创建的表，在从库上也是看不到的。
+
+mysql> create temporary table tmp as select * from t1;
+
+mysql> select * from tmp
+    -> ;
++----+
+| c1 |
++----+
+|  1 |
+|  2 |
+|  3 |
+|  4 |
+|  5 |
++----+
+
+
+从库上
+mysql> desc tmp;
+ERROR 1146 (42S02): Table 'baixyu.tmp' doesn't exist
+
+
+内部临时表
+
+内部临时表有两种类型：一种是HEAP临时表，这种临时表的所有数据都会存在内存中，对于这种表的操作不需要IO操作。另一种是OnDisk临时表，顾名思义，这种临时表会将数据存储在磁盘上。OnDisk临时表用来处理中间结果比较大的操作。如果HEAP临时表存储的数据大于MAX_HEAP_TABLE_SIZE（详情请参考MySQL手册中系统变量部分），HEAP临时表将会被自动转换成OnDisk临时表。OnDisk临时表在5.7中可以通过INTERNAL_TMP_DISK_STORAGE_ENGINE系统变量选择使用MyISAM引擎或者InnoDB引擎
+
+
+tmp_table_size这个参数是指的，内部临时表在内存中的最大的值。如果内存中的临时表的大小超过了限制，mysql会自动的将它转换成磁盘上的myisam表，如果内存够大，就增大这个参数的设置。在57上可以指定内部临时表也使用innodb存储。myisam上的临时表是有个bug的。
+
+
+
+

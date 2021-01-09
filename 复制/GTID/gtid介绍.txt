@@ -1,0 +1,91 @@
+MySQL5.7配置GTID主从---GTID介绍
+一、什么是 GTID
+GTID （Global Transaction Identifiers）是对于一个已提交事务的编号，事务的唯一编号，并且是一个全局唯一的编号。GTID 和事务会记录到 binlog 中，用来标识事务。
+GTID 是用来替代以前 classic 复制方法，MySQL-5.6.2 开始支持 GTID，在 MySQL-5.6.10 后完善。
+有了 GTID，一个事务在集群中就不再孤单，在每一个节点中，都存在具有相同标识符的兄弟们和它作伴，可以避免同一个事务，在同一个节点中出现多次的情况。
+GTID 的出现，最直接的效果就是，每一个事务在集群中具有了唯一性的意义，这在运维方面具有更大的意义，因为使用 GTID 后再也不需要为了不断地找点而烦恼了，给 DBA 带来了很大的便利性。
+
+GTID 组成：
+GTID 是由 server_uuid:Sequence_Number 。
+Server_Uuid：是一个 MySQL 实例的全局唯一标识；存放为在$datadir/auto.cnf
+Sequence_Number：是 MySQL 内部的一个事务的编号，一个 MySQL 实例不会重复的序列号（保证服务器内唯一），也表示在该实例上已经提交事务的数量，并且随着事务提交而递增。
+根据 GTID 可以知道事务最初是在哪个实例上提交的，方便故障排查和切换
+
+cat /data/mysql/data/auto.cnf
+[auto]
+server-uuid=b3f31135-4851-11e8-b758-000c29148b03
+
+
+二、GTID 主从复制原理
+
+(1) 当一个事务在主库端执行并提交时，产生 GTID，一同记录到 binlog 日志中。
+(2) binlog 传输到 slave,并存储到 slave 的 relaylog 后，读取这个 GTID 的这个值设置 gtid_next 变量，即告诉 Slave，下一个要执行的 GTID 值。
+(3) sql 线程从 relay log 中获取 GTID，然后对比 slave 端的 binlog 是否有该 GTID。
+(4) 如果有记录，说明该 GTID 的事务已经执行，slave 会忽略。
+(5) 如果没有记录，slave 就会执行该 GTID 事务，并记录该 GTID 到自身的 binlog;
+(6) 在解析过程中会判断是否有主键，如果没有就用二级索引，如果没有就用全部扫描。
+
+
+
+三、GTID 优势和限制
+
+GTID 的优势:
+(1) 根据 GTID 可以快速的确定事务最初是在哪个实例上提交的。
+(2) 简单的实现 failover，不用以前那样在需要找 log_file 和 log_pos。
+(3) 更简单的搭建主从复制，确保每个事务只会被执行一次。
+(4) 比传统的复制更加安全。
+(5) GTID 的引入，让每一个事务在集群事务的海洋中有了秩序，使得 DBA 在运维中做集群变迁时更加方便，能够做到胸有成竹心中有数。
+
+GTID 的限制:
+因为基于 GTID 的复制依赖于事务，所以在使用 GTID 时，有些 MySQL 特性是不支持的。
+(1) 不允许在一个 SQL 同时更新一个事务引擎和非事务引擎的表；
+事务中混合多个存储引擎，就会产生多个 GTID。当使用 GTID 时，如果在同一个事务中，更新包括了非事务引擎（如 MyISAM）和事务引擎（如 InnoDB）表的操作，就会导致多个 GTID 分配给了同一个事务。
+(2) 主从库的表存储引擎必须是一致的；
+主从库的表存储引擎不一致，就会导致数据不一致。如果主从库的存储引擎不一致，例如一个是事务存储引擎，一个是非事务存储引擎，则会导致事务和 GTID 之间一对一的关系被破坏，结果就会导致基于 GTID 的复制不能正确运行；
+(3) 不支持 create table … select 语句复制（主库直接报错）
+由于使用基于行模式的复制时，create table ...select 语句会被记录为两个单独的事件（会生成两个 sql），一个是 DDL 创建表 SQL，一个是 insert into 插入数据的 SQL。由于 DDL 会导致自动提交，所以这个 sql 至少需要两个 GTID，但是 GTID 模式下，只能给这个 sql 生成一个 GTID，如果强制执行会导致和上面（2）中一样的结果。
+(4) 在一个复制组中，必须要求统一开启 GTID 或是关闭 GTID;
+(5) 开启 GTID 需要重启（5.6 需要，5.7 中不需要）
+(6) 开启 GTID 后，就不能在使用原来的传统的复制方式;
+(7) 不支持 create temporary table 和 drop temporary table 语句;
+使用 GTID 复制时，不支持 create temporary table 和 drop temporary table ，但是在 autocommit=1 情况下可以创建临时表，MASTER 创建临时表不产生 GTID 信息，所以不会同步到 SLAVE 上，但是删除临时表时，产生 GTID 会导致主从复制中断。
+(8) 不推荐在 GTID 模式的实例上进行 mysql_upgrade;
+因为 mysql_upgrade 的过程要创建或修改系统表（非事务引擎），所以不建议在开启 GTID 的模式的实例上使用带有--write-binlog 选项的 mysql_upgrade;
+(9) 不支持 sql_slave_skip_counter;
+
+
+
+四、为什么要使用 GTID
+
+比如以下M-S结构
+
+S1→M←S2，当M宕机的时候，其中一台S就必须承担起M的责任，但是由于2台S之间没有关系，很难使S2成为S1的slave。
+
+GTID 的存在方便了 Replication 的 Failover在 MySQL 5.6 GTID 出现之前 Replication failover 的操作过程：修改复制源的命令语法为：
+
+复制代码
+mysql> CHANGE MASTER TO
+MASTER_HOST='XXXX',
+MASTER_USER='XXXX',
+MASTER_PASSWORD='XXXXX',
+MASTER_LOG_FILE='XXXXX',
+MASTER_LOG_POS=XXXXX;
+复制代码
+而比较麻烦的地方是：由于同一个事务在每台服务器上所在的 binlog 名字和 Postion 位置点都不一样，那么怎么找到 slave2 当前同步停止点，对应 New Master 的 master_log_file 和 Master_log_pos 是什么的时候就成为了难题。这也就是为什么 M-S 复制集群需要使用 MMM,MHA 这样的额外管理工具的一个重要原因。
+
+其实也可以找到，只是比较麻烦，我们都知道主从复制环境中 master 的 binlog 复制到 slave 上后 事务执行时的时间戳是不变的，所有 slave 上同一个事务的时间戳都是相同的。可以根据这个时间戳定位到 Master_log_file 和 Master_log_pos。只是很费时间；麻烦。。。
+
+GTID 出现之后：
+在 MySQL 5.6 的 GTID 出现之后，处理这个问题就非常简单了。
+由于同一个事务的 GTID 在所有的节点上都是一致的，那么根据 Slave 当前停止点的 GTID 就能唯一定位到 New Master 的 GTID。
+更简单的是，由于 MASTER_AUTO_POSITION 功能的出现，我们都不需要知道 GTID 的具体值。直接使用
+
+复制代码
+mysql> CHANGE MASTER TO
+MASTER_HOST='XXXX',
+MASTER_USER='XXXXX',
+MASTER_PASSWORD='XXXXX',
+MASTER_PORT=3306,
+MASTER_AUTO_POSITION=1;
+复制代码
+命令就可以直接完成 failover 的工作了。使用 GTID 处理这个问题就简单很多。。

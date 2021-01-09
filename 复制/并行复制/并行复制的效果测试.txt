@@ -1,0 +1,80 @@
+在主库上执行大量的吸入操作，模拟延时,因为之前的基准测试，导致从库出现长时间的复制延时，在执行stop slave的时候没有响应。
+      Master_SSL_Key: 
+        Seconds_Behind_Master: 85719
+		
+		mysql> set global slave_parallel_type=logical_clock;
+ERROR 3017 (HY000): This operation cannot be performed with a running slave sql thread; run STOP SLAVE SQL_THREAD first
+mysql> stop slave;--卡住
+
+但是日志中已经提示了是停止的状态，实际上复制已经无法继续进行了，只能重置从库
+ [Note] Slave SQL thread for channel '' exiting, replication stopped in log 'mysql-bin.000498' at position 391736019
+
+ 在重启后设置了多线程的复制，在日志中提示
+ Coordinator has waited 431 times hitting slave_pending_jobs_size_max; current event size = 8187.
+ 
+ 并且查看复制的状态，显示的延时为0，这个不对，并且sql的运行状态是Waiting for Slave Workers to free pending events
+  Seconds_Behind_Master: 0
+Master_SSL_Verify_Server_Cert: No
+                Last_IO_Errno: 0
+                Last_IO_Error: 
+               Last_SQL_Errno: 0
+               Last_SQL_Error: 
+  Replicate_Ignore_Server_Ids: 
+             Master_Server_Id: 2303334
+                  Master_UUID: 30b154c5-96c4-11e7-a780-246e966afb38
+             Master_Info_File: mysql.slave_master_info
+                    SQL_Delay: 0
+          SQL_Remaining_Delay: NULL
+      Slave_SQL_Running_State: Waiting for Slave Workers to free pending events
+
+ 这个是一个bug，是说等待执行的事件的大小超过了slave-pending-jobs-size-max的大小后，sql线程就会处于等待的状态，就是上面的状态，那是不是说，如果主库的压力很大，突然的事件很多，那么多线程复制的时候就会触发这个bug。
+ 这个时候只能是设置会单线程，然后追上，在设置成多线程复制
+ 
+
+ 首先在数据库默认配置下使用sysbench 150并发oltp_read_write模拟同步延时的状态
+
+
+
+看到已经出现了延时，最大的延时有115s
+115.00s [ 113.80s, 113.67s, 61.74s ]
+113.99s [ 113.81s, 113.70s, 61.87s ]
+114.00s [ 113.83s, 113.73s, 61.99s ]
+114.00s [ 113.85s, 113.76s, 62.12s ]
+114.00s [ 113.86s, 113.79s, 62.25s ]
+113.99s [ 113.88s, 113.82s, 62.37s ]
+112.99s [ 113.88s, 113.85s, 62.50s ]
+113.00s [ 113.88s, 113.87s, 62.63s ]
+112.99s [ 113.88s, 113.90s, 62.75s ]
+113.00s [ 113.88s, 113.92s, 62.88s ]
+112.00s [ 113.86s, 113.95s, 63.00s ]
+112.00s [ 113.85s, 11
+
+开启并行复制后,监控只有少数的几个1s的延时，另外在error log中可以看到多线程slave worker的工作情况
+mysql> set global slave_parallel_workers=8;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> set global slave_parallel_type=logical_clock;
+Query OK, 0 rows affected (0.00 sec)
+
+0.00s [  0.03s, 13.60s, 72.26s ]
+1.00s [  0.05s, 13.26s, 72.20s ]
+0.00s [  0.05s, 12.92s, 72.15s ]
+0.00s [  0.05s, 12.58s, 72.09s ]
+0.00s [  0.03s, 12.24s, 72.04s ]
+0.00s [  0.02s, 11.90s, 71.98s ]
+0.00s [  0.02s, 11.57s, 71.92s ]
+0.00s [  0.02s, 11.23s, 71.87s ]
+0.00s [  0.02s, 10.89s, 71.81s ]
+1.00s [  0.03s, 10.56s, 71.75s ]
+0.00s [  0.03s, 10.22s, 71.69s ]
+0.00s [  0.03s,  9.88s, 71.63s ]
+0.00s [  0.03s,  9.55s, 71.57s ]
+1.00s [  0.05s,  9.21s, 71.51s ]
+0.00s [  0.05s,  8.88s, 71.45s ]
+0.00s [  0.05s,  8.55s, 71.38s ]
+1.00s [  0.07s,  8.22s, 71.32s ]
+0.00s [  0.07s,  7.88s, 71.26s ]
+0.00s [  0.07s,  7.55s, 71.20s ]
+
+ [Note] Multi-threaded slave statistics for channel '': seconds elapsed = 120; events assigned = 11330561; worker queues filled over overrun level = 0; waited due a Worker queue full = 0; waited due the total size = 0; waited at clock conflicts = 240119654100 waited (count) when Workers occupied = 15165 waited when Workers occupied = 3052180400
+

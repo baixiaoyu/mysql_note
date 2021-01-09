@@ -1,0 +1,14 @@
+MDL锁机制介绍
+
+首先介绍一下MDL(METADATA LOCK)锁机制，MySQL为了保证表结构的完整性和一致性，对表的所有访问都需要获得相应级别的MDL锁，比如以下场景：
+
+ session 1: start transaction; select * from test.t1;
+ session 2: alter table test.t1 add extra int;
+ session 3: select * from test.t1;
+session 1对t1表做查询，首先需要获取t1表的MDL_SHARED_READ级别MDL锁。锁一直持续到commit结束，然后释放。
+
+session 2对t1表做DDL，需要获取t1表的MDL_EXCLUSIVE级别MDL锁，因为MDL_SHARED_READ与MDL_EXCLUSIVE不相容，所以session 2被session 1阻塞，然后进入等待队列。
+
+session 3对t1表做查询，因为等待队列中有MDL_EXCLUSIVE级别MDL锁请求，所以session3也被阻塞，进入等待队列。
+
+这种场景就是目前因为MDL锁导致的很经典的阻塞问题，如果session1长时间未提交，或者查询持续过长时间，那么后续对t1表的所有读写操作，都被阻塞。 对于在线的业务来说，很容易导致业务中断

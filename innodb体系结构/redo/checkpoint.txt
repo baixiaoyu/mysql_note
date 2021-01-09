@@ -1,0 +1,17 @@
+checkpoint的目的：
+1 缩短数据库的恢复时间
+2缓冲池不够时，将脏页刷新到磁盘
+3重做日志不可用是，刷新脏页
+mysql有2中checkpoint
+sharp checkpoint:在数据库关闭的时候，将所有的页都刷新回磁盘。即参数innodb_fast_shutdown=1;
+
+fuzzy checkpoint: 只刷新部分页，发生在下面的几种情况中：
+1 master thread checkpoint
+2flush_lru_list checkpoint 会保证有100个空闲页，如果没有就刷新lru，在新版本中通过innodb_lru_scan_depth控制lru列表中的可用页的数量。
+3async/sync flush checkpoint
+4dirty page too much checkpoint 这个是参数innodb_max_dirty_pages_pct控制
+
+
+
+
+

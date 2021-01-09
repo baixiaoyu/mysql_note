@@ -1,0 +1,33 @@
+gh-ost
+--user="gh-ost"
+--password="123456"
+--host=replica.with.rbr.com
+--database="my_schema"
+--table="my_table"
+--verbose
+--alter="engine=innodb"
+--max-load=Threads_running=25
+--critical-load=Threads_running=1000
+--chunk-size=1000
+--throttle-control-replicas="myreplica.1.com,myreplica.2.com"
+--heartbeat-interval-millis=100
+--replication-lag-query="select unix_timestamp(now(6)) -
+unix_timestamp(ts) from meta.heartbeat order by ts desc limit 1"
+--max-lag-millis=500
+--switch-to-rbr
+--exact-rowcount
+--concurrent-rowcount
+--panic-flag-file=/tmp/ghost.panic.flag
+--postpone-cut-over-flag-file=/tmp/ghost.postpone.flag
+--hooks-path=/path/to/hooks/
+--hooks-hint="@$(whoami)"
+[--execute]
+
+
+
+time ./gh-ost ?--user="sbtest" --password="sbtest" --host=localhost --allow-on-master --database="sbtest" --table="sbtest1" ?--alter="ADD COLUMN c1 INT" --execute
+
+
+与osc的性能对比
+https://www.percona.com/blog/2017/07/12/gh-ost-benchmark-against-pt-online-schema-change-performance/
+

@@ -1,0 +1,1 @@
+https://www.percona.com/blog/2013/05/09/how-to-create-a-new-or-repair-a-broken-gtid-based-slave-with-percona-xtrabackup/

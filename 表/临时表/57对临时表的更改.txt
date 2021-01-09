@@ -1,0 +1,24 @@
+MySQL包括两类临时表，一类是通过create temporary table创建的临时表，一类是在query过程中using temporary而创建的临时表。
+5.7之前，内部的额using temporary创建的临时表，默认只能使用myisam引擎，而在5.7之后，可以选择InnoDB引擎来创建。
+临时表的引擎选择使用下面的这两个参数来决定：
+
+mysql> show global variables like '%tmp%';
++----------------------------------+---------------------------------------+
+| Variable_name                    | Value                                 |
++----------------------------------+---------------------------------------+
+| default_tmp_storage_engine       | InnoDB                                |
+| internal_tmp_disk_storage_engine | InnoDB                                |
+2. 临时表空间
+5.7之后，使用了独立的临时表空间来存储临时表数据，但不能是压缩表。临时表空间在实例启动的时候进行创建，shutdown的时候进行删除。
+
+例如如下的配置：
+
+mysql> show global variables like '%innodb_temp%'; 
++----------------------------+-----------------------+
+| Variable_name              | Value                 |
++----------------------------+-----------------------+
+| innodb_temp_data_file_path | ibtmp1:12M:autoextend |
++----------------------------+-----------------------+
+create temporary table和using temporary table将共用这个临时表空间。
+
+

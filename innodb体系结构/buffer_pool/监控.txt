@@ -1,0 +1,11 @@
+mysql> show global status like
+'innodb_buffer_pool_pages_total';
+mysql> show global status like
+'innodb_buffer_pool_pages_free';
+mysql> show global status like 'Innodb_buffer_pool_reads';
+mysql> show global status like
+'Innodb_buffer_pool_read_requests';
+mysql> select * from
+information_schema.INNODB_BUFFER_POOL_STATS\G;
+mysql> select * from
+sys.schema_table_statistics_with_buffer\G;

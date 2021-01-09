@@ -1,0 +1,28 @@
+Last checkpoint at就是系统最后一次刷新buffer pool中页数据到磁盘的checkpoint，checkpoint是和redo log进行关联操作的，也就记录在redo log中，checkpoint记录在redo log第一个文件的头部，存储两个值循环更替修改。
+
+
+
+LSN（log sequence number）日志序列号，5.6.3之后占用8字节，LSN主要用于发生crash时对数据进行recovery，LSN是一个一直递增的整型数字，表示事务写入到日志的字节总量。
+
+lsn代表的是：重做日志的写入总量，这个可以理解，checkpoint的位置，这个也能理解，页的版本，这个不太理解，看下面的解释，主要是在页上有lsn的信息
+
+LSN不仅只存在于重做日志中，在每个数据页头部也会有对应的LSN号，该LSN记录当前页最后一次修改的LSN号，用于在recovery时对比重做日志LSN号决定是否对该页进行恢复数据。前面说的checkpoint也是有LSN号记录的，LSN号串联起一个事务开始到恢复的过程。
+
+
+页上的lsn标记的是页最后一次刷新时候的lsn的大小。比如页上的lsn是10，数据库启动的时候，重做日志中的lsn是20，那么对于页就要从lsn10开始应用redo恢复。
+
+last checkpoint的lsn都小于当前lsn的值，因为checkpoint是定时发生的，不是实时的。
+
+在Innodb事务日志中，采用了Fuzzy Checkpoint，Innodb每次取最老的modified page(last checkpoint)对应的LSN，再将此脏页的LSN作为Checkpoint点记录到日志文件，意思就是“此LSN之前的LSN对应的日志和数据都已经flush到redo log
+
+当mysql crash的时候，Innodb扫描redo log，从last checkpoint开始apply redo log到buffer pool，直到last checkpoint对应的LSN等于Log flushed up to对应的LSN，则恢复完成
+
+mysql如何手工触发checkpoint，貌似是没有办法手工触发的。
+
+在show engine innodb status的结果输出中
+log sequence number表示当前的lsn， log flushed up to表示刷新到重做日志文件的lsn，last checkpoint at表示刷新到磁盘的lsn。这个checkpoint的信息是记录在哪里的？
+
+
+
+修改lsn的一个方法：
+https://www.percona.com/blog/2013/09/11/how-to-move-the-innodb-log-sequence-number-lsn-forward/

@@ -1,0 +1,9 @@
+https://www.percona.com/blog/2015/01/29/multi-threaded-replication-with-mysql-5-6-use-gtids/
+在这篇文章中提到了在56的并行复制中，使用普通的复制，在进行skip的时候，show slave status的信息不正确，这样你在从库上进行复制的时候，有可能就是不正确的。备份的程序使用了show slave status来找pos。
+
+因为在从库上不同的库上进行了事件的回放，所以show slave status的结果是不准确的额，文档上说是一个低水位线，不一定是最近执行的事务的位置，gtid能解决这个问题。
+那么show slave status是怎么实现的？？
+
+
+
+

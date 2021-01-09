@@ -1,0 +1,39 @@
+https://www.percona.com/blog/2016/12/01/database-daily-ops-series-gtid-replication-binary-logs-purge/
+
+在进行了几次的切换之后，executed_set的值可能会变得比较混乱。
+
+errant事务的问题：
+就是在从库上执行了一个事物，然后这个从库被提升为主库，那么这个事务会被发送到所有的server上，这可能不是我们想要的结果。如果在binlog中不在存在这个事务的信息，那么就会触发一个复制的错误。
+
+检测，如果If SELECT GTID_SUBSET(slave_set,master_set)这个返回了0，那么就说明有errant事务存在。
+然后使用GTID_SUBTRACT(master_set,slave_set)来定位是哪些事务。
+
+如何避免，尽量写都在从库上，然后非要在从库上进行写入，那么设置set sql_log_bin=0;
+
+开启gtid后，由于log_slave_updates的原因，会增加一些io的消耗。
+
+gtid和实际的位点信息映射是放在内存中的。在出事连接的时候，dump线程会扫描master的binglog，如果slave lag很大，那么这个操作会很昂贵。
+
+
+关于errant事务的处理及使用工具的进行切换的时候需要注意的地方：
+https://www.percona.com/blog/2014/05/19/errant-transactions-major-hurdle-for-gtid-based-failover-in-mysql-5-6/
+
+在使用工具进行切换的时候需要进行测试，看是否有errant产生。有的话是否需要注册空事务来解决这个问题。
+
+
+gtid的问题与限制，下面这个是讨论的pos的复制与gtid的复制是否能混合
+https://www.percona.com/blog/2013/05/21/replication-in-mysql-5-6-gtids-benefits-and-limitations-part-1/
+
+我的测试，在一主两从的情况下，主和一个从库已经配置了gtid，那么在另一个从库上如果没有设置gtid是会不能用pos复制的，报下面的错误：
+
+
+
+
+这个是一些不同场景下的测试
+https://www.percona.com/blog/2013/05/30/replication-in-mysql-5-6-gtids-benefits-and-limitations-part-2/
+
+
+
+在gtid的事务中不能使用临时表。监控crash-safe的slave及并行复制对于gtid不成熟？？？这个我记得开启并行复制是要使用gtid的啊。
+
+

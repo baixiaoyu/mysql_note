@@ -1,0 +1,23 @@
+查看所有参数
+inception get variables;
+
+select /*+ gather_plan_statistics */ count(1) from(select DISTINCT DEVICE_ID from TB_MOB_DEVICE );
+
+
+启动
+/usr/local/inception/bin/Inception --defaults-file=/etc/inc.cnf
+
+连接
+
+/usr/local/inception/bin/mysql -u root -S /tmp/inc.socket -p
+
+获取osc执行的进度信息
+mysql> inception get osc_percent 'sqlhash'\G
+
+查看inception中正在执行的线程任务
+inception get processlist;
+
+查看osc的任务
+
+inception get osc processlist;
+

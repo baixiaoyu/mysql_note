@@ -1,0 +1,49 @@
+这篇文章中有很多的方法来处理是什么进程kill了mysql
+
+https://www.percona.com/blog/2015/03/06/stopped-mysql-tracing-back-signals-sent-mysql/
+
+
+SystemTap
+
+yum install kernel-debuginfo kernel-debuginfo-common kernel-devel
+yum install systemtap systemtap-runtime
+
+cat find_sighupper.stp
+
+#!/usr/bin/stap
+# Prints information on process which sent HUP signal to mysqld
+probe begin {
+  printf("%-26s %-8s %-5s %-8s %-5sn", "TIME", "SOURCE", "SPID", "TARGET", "TPID");
+}
+probe nd_syscall.kill.return {
+  sname = @entry(execname());
+  spid = @entry(pid());
+  sig = @entry(uint_arg(2));
+  tpid = @entry(uint_arg(1));
+  tname = pid2execname(tpid);
+  time = ctime(gettimeofday_s());
+  if (sig == 1 && tname == "mysqld")
+    printf("%-26s %-8s %-5d %-8s %-5dn", time, sname, spid, tname, tpid);
+}
+
+使用stap find_sighupper.stp
+
+
+
+使用audit
+
+ start your trace and track 64 bit kill system calls that send HUP signals with signal ID of 1:，如果是要监控9那么下面的参数要进行修改
+
+yum install audit
+
+[root@centos7]~# auditctl -l
+No rules
+[root@centos7]~# auditctl -a exit,always -F arch=b64 -S kill -F a1=1
+[root@centos7]~# auditctl -l
+LIST_RULES: exit,always arch=3221225534 (0xc000003e) a1=1 (0x1) syscall=kill
+[root@centos7]~# auditctl -s
+AUDIT_STATUS: enabled=1 flag=1 pid=7010 rate_limit=0 backlog_limit=320 lost=0 backlog=0
+[root@centos7]~# pidof mysqld
+1984
+[root@centos7]~# kill -1 1984
+[root@centos7]~# tail -2 /var/log/audit/audit.log

@@ -1,0 +1,12 @@
+pt-config-diff h=127.0.0.1,P=3306,u=root,p=xx  h=xx48,P=3333,u=root,p=xxx
+
+
+pt-config-diff h=xx2,P=3306,u=root,p=xx  h=xx,P=3336,u=root,p=xx 
+
+
+
+
+pt-config-diff h=10.xxx,P=3306,u=root,p=xx  h=xx,P=3308,u=root,p=xx 
+
+
+pt-config-diff h=10xx,P=3335,u=root,p=xx  h=1xx,P=3335,u=root,p=xxx

@@ -1,0 +1,18 @@
+https://www.percona.com/blog/2017/10/18/chose-mysql-innodb_log_file_size/
+
+mysql的redo文件大小的设置方式与oracle推荐的大小设置方式是一样的，至少15分钟，半小时或一小时切换一次最好。
+
+在mysql中，有2个监控指标max checkpoint age, uncheckpointed bytes
+
+如果uncheckpointed bytes的值接近max checkpoint age，那么说明redo log file太小了，需要调大。
+
+我的理解max checkpoint age可以等价于redo log的大小，到了redo log的大小肯定要触发检查点了。uncheckpointed bytes就是脏块的大小，脏块的数量等于redo log大小，说明redo log切换的太快了，需要加大redo log 大小。
+
+
+但是这篇文章中提到，设置的时候要设置大的redo logfile，虽然对恢复的过程要延长，但是对于系统的吞吐量来说会是好事情
+https://www.percona.com/blog/2016/05/31/what-is-a-big-innodb_log_file_size/
+innodb_log_file_size
+
+
+
+https://www.percona.com/blog/2008/11/21/how-to-calculate-a-good-innodb-log-file-size/

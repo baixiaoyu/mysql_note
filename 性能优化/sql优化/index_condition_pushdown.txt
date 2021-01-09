@@ -1,0 +1,23 @@
+Index Condition Pushdown (ICP)是MySQL 5.6 版本中的新特性,是一种在存储引擎层使用索引过滤数据的一种优化方式。
+
+a 当关闭ICP时,index 仅仅是data access 的一种访问方式，存储引擎通过索引回表获取的数据会传递到MySQL Server 层进行where条件过滤。
+
+b 当打开ICP时,如果部分where条件能使用索引中的字段,MySQL Server 会把这部分下推到引擎层,可以利用index过滤的where条件在存储引擎层进行数据过滤,而非将所有通过index access的结果传递到MySQL server层进行where过滤.
+
+优化效果:ICP能减少引擎层访问基表的次数和MySQL Server 访问存储引擎的次数,减少io次数，提高查询语句性能。
+
+ICP 开启时的执行计划 含有 Using index condition 标示 ，表示优化器使用了ICP对数据访问进行优化
+
+ICP 关闭时的执行计划显示use where.
+
+
+四 ICP的使用限制
+
+1 当sql需要全表访问时,ICP的优化策略可用于range, ref, eq_ref,  ref_or_null 类型的访问数据方法 。
+2 支持InnoDB和MyISAM表。
+3 ICP只能用于二级索引，不能用于主索引。
+4 并非全部where条件都可以用ICP筛选。
+   如果where条件的字段不在索引列中,还是要读取整表的记录到server端做where过滤。
+5 ICP的加速效果取决于在存储引擎内通过ICP筛选掉的数据的比例。
+6 5.6 版本的不支持分表的ICP 功能，5.7 版本的开始支持。
+7 当sql 使用覆盖索引时，不支持ICP 优化方法

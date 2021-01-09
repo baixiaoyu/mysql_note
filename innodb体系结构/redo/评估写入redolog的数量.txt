@@ -1,0 +1,2 @@
+https://www.percona.com/blog/2012/10/08/measuring-the-amount-of-writes-in-innodb-redo-logs/
+这篇文章中使用了2个不同的监控指标来进行计算，正确的指标是使用lsn去计算，使用innodb_os_log_written不怎么正确，主要是写入的时候使用的是redolog的块大小，不是真正的redo数量，导致结果偏大。

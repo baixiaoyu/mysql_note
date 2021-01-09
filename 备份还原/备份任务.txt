@@ -1,0 +1,1 @@
+35 14 * * * root su - mybackup -c "python  /home/mybackup/MyBackup.py  >> /home/mybackup/out.log  2>&1"

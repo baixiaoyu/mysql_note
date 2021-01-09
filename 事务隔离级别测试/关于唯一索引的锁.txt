@@ -1,0 +1,10 @@
+对于唯一键值的锁定，next-key降级为record lock，这个是有条件的，查询的是唯一索引的全部的列，如果查询中只是查看了唯一索引中的部分列，那么还是使用的next-key lock锁定。
+
+repeatable read 对于解决幻想读怎么去理解。
+
+read commit级别下的数据不一致的问题怎么重现？
+
+看下tom关于丢失更新for update的使用的描述部分，在防止丢失更新的时候不一定非要使用for update吧。
+
+
+

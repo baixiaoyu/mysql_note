@@ -1,0 +1,90 @@
+备份test和pms两个库
+innobackupex --user=root --password=admin@mysql_motone --defaults-file=/etc/my.cnf  --include='test.*|pms.*'  --slave-info /root/test_dir/ 
+
+
+[root@perftest1 data]# innobackupex --defaults-file=/data/mysql_8888/my8888.cnf --user=root --password=xxx  --socket=/tmp/mysql_8888.sock --databases='test' /data/
+
+180313 10:51:12 innobackupex: Starting the backup operation
+
+IMPORTANT: Please check that the backup run completes successfully.
+           At the end of a successful backup run innobackupex
+           prints "completed OK!".
+
+180313 10:51:12  version_check Connecting to MySQL server with DSN 'dbi:mysql:;mysql_read_default_group=xtrabackup;port=8888;mysql_socket=/tmp/mysql_8888.sock' as 'root'  (using password: YES).
+180313 10:51:12  version_check Connected to MySQL server
+180313 10:51:12  version_check Executing a version check against the server...
+180313 10:51:12  version_check Done.
+180313 10:51:12 Connecting to MySQL server host: localhost, user: root, password: set, port: 8888, socket: /tmp/mysql_8888.sock
+Using server version 5.6.25-log
+innobackupex version 2.3.6 based on MySQL server 5.6.24 Linux (x86_64) (revision id: 7686bfc)
+xtrabackup: uses posix_fadvise().
+xtrabackup: cd to /data/mysql_8888
+xtrabackup: open files limit requested 65535, set to 65535
+xtrabackup: using the following InnoDB configuration:
+xtrabackup:   innodb_data_home_dir = /data/mysql_8888
+xtrabackup:   innodb_data_file_path = ibdata1:10M:autoextend
+xtrabackup:   innodb_log_group_home_dir = ./
+xtrabackup:   innodb_log_files_in_group = 3
+xtrabackup:   innodb_log_file_size = 536870912
+xtrabackup: using O_DIRECT
+180313 10:51:12 >> log scanned up to (266586123043)
+xtrabackup: Generating a list of tablespaces
+180313 10:51:13 [01] Copying /data/mysql_8888/ibdata1 to /data//2018-03-13_10-51-12/ibdata1
+180313 10:51:13 >> log scanned up to (266586123043)
+180313 10:51:14 >> log scanned up to (266586123043)
+180313 10:51:15 >> log scanned up to (266586123043)
+180313 10:51:43 >> log scanned up to (266586123043)
+180313 10:51:44 >> log scanned up to (266586123043)
+180313 10:51:45 >> log scanned up to (266586123043)
+180313 10:51:46 >> log scanned up to (266586123043)
+180313 10:51:47 [01]        ...done
+180313 10:51:47 [01] Copying ./test/sbtest9.ibd to /data//2018-03-13_10-51-12/test/sbtest9.ibd
+180313 10:51:47 >> log scanned up to (266586123043)
+180313 10:51:48 [01]        ...done
+180313 10:51:48 [01] Copying ./test/sbtest41.ibd to /data//2018-03-13_10-51-12/test/sbtest41.ibd
+180313 10:51:48 [01]        ...done
+180313 10:52:17 [01] Copying ./test/sbtest2.ibd to /data//2018-03-13_10-51-12/test/sbtest2.ibd
+180313 10:52:17 [01]        ...done
+180313 10:52:17 >> log scanned up to (266586123043)
+180313 10:52:18 Executing FLUSH NO_WRITE_TO_BINLOG TABLES...
+180313 10:52:18 Executing FLUSH TABLES WITH READ LOCK...
+180313 10:52:18 Starting to backup non-InnoDB tables and files
+180313 10:52:18 [01] Skipping ./sakila/payment.frm.
+180313 10:52:18 [01] Skipping ./mysql/servers.frm.
+180313 10:52:18 [01] Skipping ./sakila_recovered/db.opt.
+180313 10:52:18 [01] Copying ./test/sbtest18.frm to /data//2018-03-13_10-51-12/test/sbtest18.frm
+180313 10:52:18 [01]        ...done
+180313 10:52:18 [01] Copying ./test/sbtest39.frm to /data//2018-03-13_10-51-12/test/sbtest39.frm
+180313 10:52:18 [01]        ...done
+180313 10:52:18 [01] Copying ./test/sbtest32.frm to /data//2018-03-13_10-51-12/test/sbtest32.frm
+180313 10:52:18 [01]        ...done
+180313 10:52:18 [00] Writing tmp/db.opt
+180313 10:52:18 [00]        ...done
+180313 10:52:18 [01] Skipping ./tpcc1000/warehouse.ibd.
+
+180313 10:52:18 [01] Skipping ./vim_recovered/db.opt.
+180313 10:52:18 [01] Skipping ./performance_schema/threads.frm.
+180313 10:52:18 [01] Skipping ./performance_schema/events_statements_summary_by_digest.frm.
+
+180313 10:52:18 Finished backing up non-InnoDB tables and files
+180313 10:52:18 [00] Writing xtrabackup_binlog_info
+180313 10:52:18 [00]        ...done
+180313 10:52:18 Executing FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS...
+xtrabackup: The latest check point (for incremental): '266586123043'
+xtrabackup: Stopping log copying thread.
+.180313 10:52:18 >> log scanned up to (266586123043)
+
+180313 10:52:18 Executing UNLOCK TABLES
+180313 10:52:18 All tables unlocked
+180313 10:52:18 Backup created in directory '/data//2018-03-13_10-51-12'
+MySQL binlog position: filename 'mysql-bin.000166', position '120'
+180313 10:52:18 [00] Writing backup-my.cnf
+180313 10:52:18 [00]        ...done
+180313 10:52:18 [00] Writing xtrabackup_info
+180313 10:52:18 [00]        ...done
+xtrabackup: Transaction log of lsn (266586123043) to (266586123043) was copied.
+180313 10:52:18 completed OK!
+
+
+xtrabackup备份130g的库，用了10多分钟吧。
+

@@ -1,0 +1,4 @@
+https://www.percona.com/blog/2014/06/13/mydumper-less-locking/
+
+
+对于之前的flush table with read lock加的时间太长了，新的版本中，只是对非innodb的表加了这个锁，innodb表不加，减少了锁的时间。

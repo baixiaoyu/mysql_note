@@ -1,0 +1,57 @@
+group_replication_unreachable_majority_timeout
+这个参数控制着在遇到网络错误的时候，离开组之前等待多长时间
+
+在出现脑裂的情况下，当大多数的组在运行的时候，少数的组会等待重新进行连接，在少数成员的组中处理的事务被阻塞，直到使用stop group replication停止组复制。也就是说应用上会出现卡住的现象。那么在停止组复制的时候，事务是否会回滚掉呢？
+
+在等待上面的指定时间后，所有少数成员的组处理的事务会被回滚掉，server的状态会变成error状态，并将自己设置成super_read_only=on的模式。
+
+
+
+group_replication_transaction_size_limit
+这个是控制组能接受的事的大小，如果事务超过了这个限制会被回滚。默认情况下是没有限制的，这个参数需要根据业务去修改，具体要怎么定义这个参数设置的大小是个问题。
+
+
+
+
+
+
+group_replication_single_primary_mode
+
+这个参数设置自动的挑选一个server成为主，什么时候挑选？默认值是yes
+
+
+
+group_replication_auto_increment_increment这个参数控制事务的连续列值的间隔，默认是7，是指的自动增长列的间隔？这个参数是指的表中自增列的间隔
+
+
+mysql> select * from stu;
++----+--------+------+
+| id | name   | age  |
++----+--------+------+
+|  1 | bai    |   10 |
+|  7 | xiaoyu |   20 |
++----+--------+------+
+2 rows in set (0.00 sec)
+
+mysql> insert into stu(name,age) values('jack',30);
+Query OK, 1 row affected (0.00 sec)
+
+mysql> select * from stu;
++----+--------+------+
+| id | name   | age  |
++----+--------+------+
+|  1 | bai    |   10 |
+|  7 | xiaoyu |   20 |
+| 14 | jack   |   30 |
++----+--------+------+
+3 rows in set (0.00 sec)
+
+
+
+
+SET GLOBAL group_replication_poll_spin_loops= 10000;
+在线程等待更多传入网络消息之前，组通信线程等待通信引擎mutex被释放的次数。这个我还是没明白是怎么回事
+
+组通信线程（GCT）在加载组复制插件时循环运行。 GCT接收来自组和来自插件的消息，处理与仲裁和故障检测相关的任务，发送一些保持活动的消息，还处理来自/到服务器/组的传入和传出事务。 GCT等待队列中的传入消息。 当没有消息时，GCT等待。 通过配置这个等待时间稍长一点（做一个积极的等待），在实际上睡觉之前在某些情况下证明是有益的。 这是因为替代方法是操作系统从处理器中切换GCT并执行上下文切换。
+
+

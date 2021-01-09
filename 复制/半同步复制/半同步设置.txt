@@ -1,0 +1,73 @@
+MySQL的复制默认情况下是异步的，master写事件到二进制日志，不去管从库是否接受并且处理它，在这种情况下，如果master crash了，那么事务可能没有发送到从库上去，可能会有数据丢失。 
+在半同步复制的模式下，从库在连接主库的时候会提示是否是半同步方式的。 
+如果半同步模式在主库侧是启用的，并且有一个半同步的从库，那么主库上的线程中的提交会被阻塞，直到一个半同步从库确认接收到了事务的所有事件，或直到超时。 
+从库只有在事件写到它的relay log并被刷新到磁盘上去，才会确认收到了事件。 
+如果超时发生了，并且没有任何的从库确认收到事务，master会转换到异步复制的模式下。当至少一个从库跟上后，master会转换成半同步复制模式。 
+半同步复制模式必须在master和从库端都要启用。如果主库上没有启用或是没有从库启用设置，那么主库还是使用异步复制。 
+半同步复制是对数据的保护更好了，但是性能上也收到了影响，损耗的性能至少是发送commit到从库到确认从库接受了所有的事件。半同步最好是使用在同一网络中。
+
+半同步复制的管理接口： 
+两个插件实现半同步复制的能力，一个是master测的，一个是从库测的。 
+rpl_semi_sync_master_enabled该参数控制master是否启动半同步复制。 
+rpl_semi_sync_master_timeout该参数控制master等待从库确认要多久。默认是10s。 
+rpl_semi_sync_slave_enabled改参数控制从库是否启用半同步复制。 
+Rpl_semi_sync_master_clients这个变量能看到半同步复制的从库有几个。 
+Rpl_semi_sync_master_status这个变量能指定master是否在半同步复制的模式下。上面说了2个情况master可能会切换回异步复制。 
+Rpl_semi_sync_master_no_tx从库确认不成功commit的数量 
+Rpl_semi_sync_master_yes_tx从库确认成功的commit的数量。 
+到了5.7版本 
+可以通过参数rpl_semi_sync_master_wait_for_slave_count 指定几个从库确认接受后，才继续处理，默认值是1. 
+rpl_semi_sync_master_wait_point 这个参数指定了master在什么时间点去等待从库的确认，然后反馈给客户端，继续处理请求。 
+默认是AFTER_SYNC：这个参数设置下，master写事务到二进制log和slave，同步二进制日志到磁盘。master在sync后等待从库的确认，一旦收到确认，master提交事务到存储引擎，返回给客户端，继续处理请求。 
+after_commit，这个参数设置下，master写事务信息到二进制日志和slave下，同步bin log提交事务，在提交事务后，master等待从库的确认信息。一旦接受到确认信息后，master返回结果给客户端，继续处理 请求。 
+看到这个参数就是控制master什么时候提交的。 
+两个参数的设置下，可能会有下面的问题： 
+With AFTER_SYNC, all clients see the committed transaction at the same time: After it has been acknowledged by the slave and committed to the storage engine on the master. Thus, all clients see the same data on the master.
+
+In the event of master failure, all transactions committed on the master have been replicated to the slave (saved to its relay log). A crash of the master and failover to the slave is lossless because the slave is up to date.
+
+With AFTER_COMMIT, the client issuing the transaction gets a return status only after the server commits to the storage engine and receives slave acknowledgment. After the commit and before slave acknowledgment, other clients can see the committed transaction before the committing client.
+
+If something goes wrong such that the slave does not process the transaction, then in the event of a master crash and failover to the slave, it is possible that such clients will see a loss of data relative to what they saw on the master. 
+没太明白为什么还要设置after_commit这个值，没看到有什么优势，数据安全性上没有保障，虽然提前提交了，但是还是要等slave的反馈，在处理速度上也没提升。 
+加载插件需要mysql server能动态加载，查看have_dynamic_loading参数是否支持。 
+插件的名字是semisync_master ，semisync_slave，master的插件必须在master server的插件目录下，salve的插件必须在slave的插件目录下。 
+在master上执行： 
+INSTALL PLUGIN rpl_semi_sync_master SONAME ‘semisync_master.so’; 
+在slave上执行： 
+INSTALL PLUGIN rpl_semi_sync_slave SONAME ‘semisync_slave.so’; 
+如果在安装插件的时候遇到了下面的错误，还需要安装libimf 
+mysql> INSTALL PLUGIN rpl_semi_sync_master SONAME ‘semisync_master.so’; 
+ERROR 1126 (HY000): Can’t open shared library 
+‘/usr/local/mysql/lib/plugin/semisync_master.so’ 
+(errno: 22 libimf.so: cannot open shared object file: 
+No such file or directory) 
+You can obtain libimf from http://dev.mysql.com/downloads/os-linux.html. 
+确认插件是否安装 
+SELECT PLUGIN_NAME, PLUGIN_STATUS FROM INFORMATION_SCHEMA.PLUGINS WHERE PLUGIN_NAME LIKE ‘%semi%’ 
+配置系统参数，使系统支持半同步复制 
+At runtime, these master-side system variables are available:
+
+SET GLOBAL rpl_semi_sync_master_enabled = {0|1}; 
+SET GLOBAL rpl_semi_sync_master_timeout = N; 
+On the slave side, this system variable is available:
+
+SET GLOBAL rpl_semi_sync_slave_enabled = {0|1}; 
+在从库上重启io线程 
+STOP SLAVE IO_THREAD; 
+START SLAVE IO_THREAD; 
+也可以将参数添加到配置文件中 
+On the master:
+
+[mysqld] 
+rpl_semi_sync_master_enabled=1 
+rpl_semi_sync_master_timeout=1000 # 1 second 
+On each slave:
+
+[mysqld] 
+rpl_semi_sync_slave_enabled=1 
+配置好后，在server上查看配置的状态及设置 
+show variables like ‘%rpl%’; 
+show status like ‘%rpl%’;
+
+经过测试，如果从库的复制是自启动的，那么在slave重启后设置参数rpl_semi_sync_slave_enabled=on后，依然需要重启io_thread，主库上的Rpl_semi_sync_master_status才能变成on的状态。

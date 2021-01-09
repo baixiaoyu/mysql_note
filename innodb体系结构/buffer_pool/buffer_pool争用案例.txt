@@ -1,0 +1,6 @@
+https://www.percona.com/blog/2011/11/13/side-load-may-massively-impact-your-mysql-performance/
+
+这个例子中是业务语句与备份语句争用buffer pool，导致业务语句的数据被排挤到磁盘上，从而导致了性能的下降。
+innodb_old_blocks_time  这个参数指定了table scan的数据在移动到yong 列表前的等待时间。
+
+

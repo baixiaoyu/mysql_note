@@ -1,0 +1,91 @@
+为了保证主数据库服务的安全，该工具实现了许多保护措施：
+
+自动设置 innodb_lock_wait_timeout 为1s，避免引起
+默认当数据库有25个以上的并发查询时，pt-table-checksum会暂停。可以设置 --max-load 选项来设置这个阀值
+当用 Ctrl+C 停止任务后，工具会正常的完成当前 chunk 检测，下次使用 --resume 选项启动可以恢复继续下一个 chunk
+
+pt-table-checksum 会根据服务器负载动态改变 chunk 大小，减少从库的延迟如果是表的第一个chunk，那么chunk-size一般为1000；如果不是表的第一个chunk，那么采用19步中分析出的结果
+可以使用--function指定不同的hash函数方法
+
+该工具执行的大概的流程如下：
+1\. 连接到主库：pt工具连接到主库，然后自动发现主库的所有从库。默认采用show full processlist来查找从库，但是这只有在主从实例端口相同的情况下才有效。
+3\. 查找主库或者从库是否有复制过滤规则：这是为了安全而默认检查的选项。你可以关闭这个检查，但是这可能导致checksum的sql语句要么不会同步到从库，要么到了从库发现从库没有要被checksum的表，这都会导致从库同步卡库。
+5\. 开始获取表，一个个的计算。
+6\. 如果是表的第一个chunk，那么chunk-size一般为1000；如果不是表的第一个chunk，那么采用19步中分析出的结果。
+7\. 检查表结构，进行数据类型转换等，生成checksum的sql语句。
+8\. 根据表上的索引和数据的分布，选择最合适的split表的方法。
+9\. 开始checksum表。
+10\. 默认在chunk一个表之前，先删除上次这个表相关的计算结果。除非–resume。
+14\. 根据explain的结果，判断chunk的size是否超过了你定义的chunk-size的上限。如果超过了，为了不影响线上性能，这个chunk将被忽略。
+15\. 把要checksum的行加上for update锁，并计算。
+17-18\. 把计算结果存储到master_crc master_count列中。
+19\. 调整下一个chunk的大小。
+20\. 等待从库追上主库。如果没有延迟备份的从库在运行，最好检查所有的从库，如果发现延迟最大的从库延迟超过max-lag秒，pt工具在这里将暂停。
+21\. 如果发现主库的max-load超过某个阈值，pt工具在这里将暂停。
+22\. 继续下一个chunk，直到这个table被chunk完毕。
+23-24\. 等待从库执行完checksum，便于生成汇总的统计结果。每个表汇总并统计一次。
+25-26\. 循环每个表，直到结束。
+
+
+
+ --max-lag
+
+    默认1S，主从最大延迟，超过这个延迟时间，就会停下来等待从库同步，确定方法是采用Seconds_Behind_Master的值
+
+建议在管理机上运行这个pt-table-checksum
+
+非3306端口，无法找到从库
+pt-table-checksum --nocheck-replication-filters  --replicate=toolkit.checksums --databases=test --tables=baixyu h=127.0.0.1,u=root,p=xxx,P=3333
+
+
+需要将从库的信息放到表中，在工具中指定存放从库的表的信息。
+
+create database percona;
+CREATE TABLE `percona`.`dsns` (
+`id` int(11) NOT NULL AUTO_INCREMENT,
+`parent_id` int(11) DEFAULT NULL,
+`dsn` varchar(255) NOT NULL,
+PRIMARY KEY (`id`)
+);
+
+grant all privileges on percona.* to percona_tk@'xxx.141.21' identified by 'percona_pass';
+从库地址
+insert into percona.dsns(dsn) values('h=xxx.142.230,P=3408,u=root,p=xxx');
+
+insert into percona.dsns(dsn) values('h=1xxx,P=3306,u=root,p=xx');
+
+pt-table-checksum --replicate=percona.checksums --nocheck-replication-filters --no-check-binlog-format h=xxx.142.231,u=root,p='xxx',P=3408 --databases=test --recursion-method dsn=h=xxx.142.231,u=percona_tk,p='percona_pass',P=3333,D=percona,t=dsns
+3333是存放dsns的表实例地址
+
+----这个是将从库的信息放到了从库的表里面了，检测指定的从库
+pt-table-checksum --replicate=percona.checksums --nocheck-replication-filters --no-check-binlog-format h=xx.36.41,u=root,p='xxx',P=3320 --databases=mxx --recursion-method dsn=h=xx,u=root,p='xxx',P=3320,D=percona,t=dsns
+
+
+查看下面的语句来看数据是否有不一样的地方,需要在从库查询
+select * from checksums where master_cnt <> this_cnt OR master_crc <> this_crc OR ISNULL(master_crc) <> ISNULL(this_crc) \G
+
+结果输出如下，下面只能是说明表不一致，但是无法说明不一致多少行数据。
+TS ：完成检查的时间。
+ERRORS ：检查时候发生错误和警告的数量。
+DIFFS ：0表示一致，1表示不一致。当指定--no-replicate-check时，会一直为0，当指定--replicate-check-only会显示不同的信息
+
+
+在检测到数据不一致的情况下，可使用pt-table-sync进行修复，高效的同步MySQL表之间的数据，他可以做单向和双向同步的表数据
+
+
+3306端口能通过
+pt-table-checksum --nocheck-replication-filters  --no-check-binlog-format --replicate=yayun.checksums --databases=yayun --tables=t1 h=127.0.0.1,u=root,p=123456,P=3306
+这种方式，非3306端口这种方式找不到从库，需要上面的dsns的方式
+
+需要表上有唯一约束，否则会报错,下面的语句只是打印输出，不会真正的去执行，h参数指定的从库的地址
+pt-table-sync --sync-to-master --replicate=percona.checksums  h=xxx.142.231,u=root,p=xxx,P=3408--databases=test --tables=baixyu --print
+pt-table-sync --sync-to-master --replicate=percona.checksums1  h=10.xx,u=root,p=xx,P=3306--databases=econtract --tables=baixyu --print
+
+
+
+pt-table-sync --sync-to-master --replicate=percona.checksums  h=xxx.142.230,u=root,p=xxx,P=3408--databases=test --tables=baixyu --print
+DELETE FROM `test`.`baixyu` WHERE `id`='2' LIMIT 1 /*percona-toolkit src_db:test src_tbl:baixyu src_dsn:P=3408,h=xxx.142.231,p=...,u=root dst_db:test dst_tbl:baixyu dst_dsn:P=3408--databases=test,h=xxx.142.230,p=...,u=root lock:1 transaction:1 changing_src:percona.checksums replicate:percona.checksums bidirectional:0 pid:2157 user:root host:biee*/
+
+
+
+

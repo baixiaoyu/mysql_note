@@ -1,0 +1,17 @@
+mysql> CREATE TABLEp_hash(
+    ->storeidmediumint(10) NOT NULL DEFAULT '0',
+    ->storename` char(255) DEFAULT NULL -> ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8 -> /*!50100 PARTITION BY HASH (storeid) -> PARTITIONS 4 */; mysql> insert into p_hash values(1,'a'); Query OK, 1 row affected (0.00 sec)
+
+mysql> insert into p_hash values(2,'b'); Query OK, 1 row affected (0.00 sec)
+
+mysql> insert into p_hash values(3,'c'); Query OK, 1 row affected (0.00 sec)
+
+mysql> insert into p_hash values(4,'d'); Query OK, 1 row affected (0.00 sec) 
+添加一个id字段，位置在第一位 alter table p_hash add column id int not null first; 
+添加主键 alter table p_hash add primary key(id, storeid);
+ 修改id为自增 alter table p_hash change id id int not null auto_increment; 
+
+mysql> select * from p_hash; +----+---------+-----------+ | id | storeid | storename | +----+---------+-----------+ | 1 | 4 | d | | 2 | 1 | a | | 3 | 2 | b | | 4 | 3 | c | +----+---------+-----------+ 4 rows in set (0.00 sec) 
+mysql> show create table p_hash; ---------+ | Table | Create Table | p_hash | CREATE TABLE p_hash (  id int(11) NOT NULL AUTO_INCREMENT,  storeid mediumint(10) NOT NULL DEFAULT '0',  storename char(255) DEFAULT NULL, PRIMARY KEY (id,storeid) ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8 /*!50100 PARTITION BY HASH (storeid) PARTITIONS 4 */ | +--------+-----------------------------------------------
+
+如果原表中的分区字段上有重复的值，那么在添加主键的时候会提示错误，需要先把重复的记录删除，添加主键后，在插入 mysql> alter table p_hash add primary key(id, storeid); ERROR 1062 (23000): Duplicate entry '0-1' for key 'PRIMARY' `

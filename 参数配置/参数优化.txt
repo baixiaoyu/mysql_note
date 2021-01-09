@@ -1,0 +1,10 @@
+ How do you tune your InnoDB config ?
+? 1) InnoDB METRICS table contains tons of stats to help you
+? 2) monitor your free page requests, note the max levels you¡¯re hitting
+? 3) you need to configure your LRU depth settings :?
+innodb_lru_scan_depth = free pages demand / BP instances
+? 4) innodb_page_cleaners = BP instances
+? 5) monitor your flushing times to be sure your total time on every pass is < 1sec
+? 6) if not => increase BP instances & cleaners & adjust LRU depth accordingly
+? but if your storage is slow, you may just see a HUGE slowdown due IO reads and
+nothing else.. ;-))

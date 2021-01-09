@@ -1,0 +1,1 @@
+mysql中修改字段类型可以使用change与modify， 使用modify命令修改字段，如果使用下面命令 alter table tb_finance_user_tag modify account_id varchar(200)； 那么只会丢失列的评论，对于not null属性有影响。默认会设置成为空 可以在修改的时候带上comment alter table tb_finance_user_tag modify account_id varchar(200) commnet 'account_id'; 使用change alter table tb_finance_user_tag change account_id account_id varchar(201); 效果更modify一样。

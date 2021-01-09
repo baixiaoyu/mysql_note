@@ -1,0 +1,162 @@
+CREATE TABLE `sbtest99` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `k` int(11) NOT NULL DEFAULT '0',
+  `c` char(120) NOT NULL DEFAULT '',
+  `pad` char(60) NOT NULL DEFAULT '',
+  `g` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `k_99` (`k`)
+) ENGINE=InnoDB AUTO_INCREMENT=100001 DEFAULT CHARSET=utf8
+
+看到在g上是没有索引的，在使用hint和不适用hint的情况下，走的执行计划并不完全一样，在没有hint的情况下是使用临时表和filesort,在使用hint的情况下只使用了filesort，更高效。
+
+mysql> explain select  g, count(*) c from sbtest99 group by g limit 5;
++----+-------------+----------+------------+------+---------------+------+---------+------+-------+----------+---------------------------------+
+| id | select_type | table    | partitions | type | possible_keys | key  | key_len | ref  | rows  | filtered | Extra                           |
++----+-------------+----------+------------+------+---------------+------+---------+------+-------+----------+---------------------------------+
+|  1 | SIMPLE      | sbtest99 | NULL       | ALL  | NULL          | NULL | NULL    | NULL | 98630 |   100.00 | Using temporary; Using filesort |
++----+-------------+----------+------------+------+---------------+------+---------+------+-------+----------+---------------------------------+
+1 row in set, 1 warning (0.00 sec)
+
+mysql> explain select SQL_BIG_RESULT   g, count(*) c from sbtest99 group by g limit 5;
++----+-------------+----------+------------+------+---------------+------+---------+------+-------+----------+----------------+
+| id | select_type | table    | partitions | type | possible_keys | key  | key_len | ref  | rows  | filtered | Extra          |
++----+-------------+----------+------------+------+---------------+------+---------+------+-------+----------+----------------+
+|  1 | SIMPLE      | sbtest99 | NULL       | ALL  | NULL          | NULL | NULL    | NULL | 98630 |   100.00 | Using filesort |
++----+-------------+----------+------------+------+---------------+------+---------+------+-------+----------+----------------+
+1 row in set, 1 warning (0.00 sec)
+mysql> select SQL_BIG_RESULT   g, count(*) c from sbtest99 group by g limit 5
+    -> ;
++-------+---+
+| g     | c |
++-------+---+
+| 19216 | 1 |
+| 20274 | 1 |
+| 20716 | 1 |
+| 20791 | 1 |
+| 21783 | 1 |
++-------+---+
+5 rows in set (0.05 sec)
+
+mysql> select  g, count(*) c from sbtest99 group by g limit 5;
++-------+---+
+| g     | c |
++-------+---+
+| 19216 | 1 |
+| 20274 | 1 |
+| 20716 | 1 |
+| 20791 | 1 |
+| 21783 | 1 |
++-------+---+
+5 rows in set (0.07 sec)
+
+
+看下面的这个例子，57在默认的情况下总是对group by进行排序显示，添加了order by null后，就是说不用排序了，可以加快处理的过程，优化这个执行计划。
+
+
+mysql> explain select g,sum(g)  from sbtest99 group by g  limit 5;
++----+-------------+----------+------------+------+---------------+------+---------+------+-------+----------+---------------------------------+
+| id | select_type | table    | partitions | type | possible_keys | key  | key_len | ref  | rows  | filtered | Extra                           |
++----+-------------+----------+------------+------+---------------+------+---------+------+-------+----------+---------------------------------+
+|  1 | SIMPLE      | sbtest99 | NULL       | ALL  | NULL          | NULL | NULL    | NULL | 98630 |   100.00 | Using temporary; Using filesort |
++----+-------------+----------+------------+------+---------------+------+---------+------+-------+----------+---------------------------------+
+1 row in set, 1 warning (0.00 sec)
+
+mysql> explain select g,sum(g)  from sbtest99 group by g order by null  limit 5;
++----+-------------+----------+------------+------+---------------+------+---------+------+-------+----------+-----------------+
+| id | select_type | table    | partitions | type | possible_keys | key  | key_len | ref  | rows  | filtered | Extra           |
++----+-------------+----------+------------+------+---------------+------+---------+------+-------+----------+-----------------+
+|  1 | SIMPLE      | sbtest99 | NULL       | ALL  | NULL          | NULL | NULL    | NULL | 98630 |   100.00 | Using temporary |
++----+-------------+----------+------------+------+---------------+------+---------+------+-------+----------+-----------------+
+在percona的文章中说不添加order by null是慢，但是我的测试中是添加了order by null后更慢。
+
+mysql> select g,sum(g)  from sbtest99 group by g order by null  limit 5;
++-------+---------+
+| g     | sum(g)  |
++-------+---------+
+| 50454 | 5146308 |
+| 50285 | 4777075 |
+| 41468 |   41468 |
+| 49779 | 5127237 |
+| 49990 | 5148970 |
++-------+---------+
+5 rows in set (0.17 sec)
+
+mysql> select g,sum(g)  from sbtest99 group by g  limit 5;
++-------+--------+
+| g     | sum(g) |
++-------+--------+
+| 19216 |  19216 |
+| 20274 |  20274 |
+| 20716 |  20716 |
+| 20791 |  20791 |
+| 21783 |  21783 |
++-------+--------+
+5 rows in set (0.09 sec)
+
+
+针对下面的查询使用了索引的skip scan
+mysql> explain select k,max(id) from sbtest99 group by k\G
+*************************** 1. row ***************************
+           id: 1
+  select_type: SIMPLE
+        table: sbtest99
+   partitions: NULL
+         type: range
+possible_keys: k_99
+          key: k_99
+      key_len: 4
+          ref: NULL
+         rows: 18321
+     filtered: 100.00
+        Extra: Using index for group-by
+1 row in set, 1 warning (0.00 sec)
+
+max不需要扫描整个group中的值，只需要找最大的值即可。
+
+在g上添加索引，针对下面的类型的语句，mysql在执行的过程中需要选择2个列上的索引，确定需要使用哪一个，是使用k上的索引来过滤还是使用g上的索引来进行分组，有的时候mysql会选择错误。
+alter table sbtest1 add key(g);
+
+mysql> select max(k) from sbtest99;
++--------+
+| max(k) |
++--------+
+|  82542 |
++--------+
+
+在第一种情况下，使用k上的索引是合适的，因为排除的数据多，然后在分组效率高，在第二个条件下，k排除的数据不多，所以还是使用g上的索引来进行分组效率高。
+
+
+mysql> explain select g, sum(g) s from sbtest99 where k>70000 group by g limit 5 \G
+*************************** 1. row ***************************
+           id: 1
+  select_type: SIMPLE
+        table: sbtest99
+   partitions: NULL
+         type: range
+possible_keys: k_99,g
+          key: k_99
+      key_len: 4
+          ref: NULL
+         rows: 167
+     filtered: 100.00
+        Extra: Using index condition; Using temporary; Using filesort
+1 row in set, 1 warning (0.00 sec)
+
+mysql> explain select g, sum(g) s from sbtest99 where k>7 group by g limit 5 \G
+*************************** 1. row ***************************
+           id: 1
+  select_type: SIMPLE
+        table: sbtest99
+   partitions: NULL
+         type: index
+possible_keys: k_99,g
+          key: g
+      key_len: 4
+          ref: NULL
+         rows: 54
+     filtered: 50.00
+        Extra: Using where
+1 row in set, 1 warning (0.00 sec)
+
+

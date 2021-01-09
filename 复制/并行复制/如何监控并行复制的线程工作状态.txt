@@ -1,0 +1,6 @@
+https://www.percona.com/blog/2015/12/18/measure-multi-threaded-slave-activity-from-performance-schema/
+
+UPDATE setup_consumers SET ENABLED = 'YES' WHERE NAME LIKE 'events_statements_%';
+
+SELECT THREAD_ID, NAME FROM threads WHERE NAME LIKE '%worker';
+SELECT THREAD_ID, EVENT_NAME, COUNT_STAR, SUM_TIMER_WAIT/1000000 AS SUM_TIMER_WAIT_MS, (SUM_TIMER_WAIT/COUNT_STAR)/1000000 AS AVG_TIME_MS FROM events_statements_summary_by_thread_by_event_name WHERE THREAD_ID IN (31,32,33,34) AND COUNT_STAR > 0;

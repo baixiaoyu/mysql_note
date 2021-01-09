@@ -1,0 +1,30 @@
+lru list, free list， flush list
+
+数据库的缓冲池是通过lru管理的，在innodb中添加了midpoint位置，读取到新页的时候，不是直接放到列表首部，而是放入midpoint位置，这个位置通过参数innodb_old_blocks_pct参数控制。midpoint之后的列表称为old列表，之前的列表称为new列表，就是冷热区，还有个参数，innodb_old_blocks_time控制着页在mid位置等待多久之后才被加入到热端。
+数据库启动的时候，lru列表是空的，页都在free list上，lru上都是存放的当前块，当页从old到new时，此时的操作是page made young，可以在show engine innodb status输出中看出来。 如果发生了很多这种操作就是说明free链表上的页太少了。分配的时候是先在free页上分配，然后在lru尾部淘汰页分配的。
+
+查看buffer_pool的状态
+select pool_id,hit_rate,pages_made_young,pages_not_young from information_schema.innodb_buffer_pool_status\G;
+
+
+可以查看innodb_buffer_page_lru来查看lru列表中的状态信息。
+
+在innodb中压缩的页是通过unzip_lru列表来管理的。
+
+
+查看unzip的页
+select * from innodb_buffer_page_lru where compressed_size<>0;
+
+脏页是保存在flush列表的。查看脏页
+
+select * from innodb_buffer_page_lru where oldest_modification>0;
+
+table_name为null表示的是系统表空间。。
+
+
+
+redo buffer的刷新
+1 master 每1s刷新
+2 commit刷新
+3 剩余空间小于1/2的时候刷新。
+

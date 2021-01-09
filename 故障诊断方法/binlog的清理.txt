@@ -1,0 +1,9 @@
+binlog会慢慢的越来越多，可以设置让系统自动删除，也可以手工删除
+系统自动删除，需要设置参数expire_logs_days这个值为存储binlog文件的天数
+如果想要手工删除，有2中方式
+1purge binary logs before datetime 这个命令清除给定时间前的所有文件
+2purge binary logs to 'filename'这个命令清除给定文件前的所有文件，可以在 master上看有哪些文件
+ show master logs
+ 然后filename之前的文件都被删除，filename变成第一个binlog
+
+

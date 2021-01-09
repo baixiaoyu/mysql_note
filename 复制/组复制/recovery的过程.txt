@@ -1,0 +1,7 @@
+在一个新的节点添加进来的时候，会在在线的节点中随机选择一个donor,这样在有多个节点添加进来的时候，会选择不同的节点。
+当连接一个donor失败的时候，会自动的尝试别的节点。一旦连接的重试次数达到了指定的值，那么会报错。
+
+重试的次数是由group_replication_recovery_retry_count指定的。
+
+group_replication_recovery_reconnect_interval这个参数指定的是，在donor连接时候，进程的休眠时间。默认是60秒
+

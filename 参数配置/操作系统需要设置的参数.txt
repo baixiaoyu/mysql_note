@@ -1,0 +1,43 @@
+这些脚本我没有放到初始化机器的脚本中
+
+
+vm.min_free_kbytes
+
+该文件表示强制Linux VM最低保留多少空闲内存（Kbytes）。当可用内存低于这个参数时，系统开始回收cache内存，以释放内存，直到可用内存大于这个值，需要保持这个值足够大，避免出现突然内存请求过大，导致系统由于内存过低导致的无法响应的情况出现
+
+vm.extra_free_kbytes
+
+这个参数是指的系统预留给应用的free内存
+
+当系统free内存小于vm.min_free_kbytes + vm.extra_free_kbytes 时，kswapd会开始回收内存，直到free内存达到 /proc/zoneinfo 中high值才停止回收。
+
+vm.extra_free_kbytes 分配多大合适呢？一般能应对流量高峰时1-2秒内存需求就可以了。free内存减少后，kswapd进程会在后台回收内存的，一般512M-2G可以满足要求。
+
+
+
+/proc/sys/vm/vfs_cache_pressure
+
+该文件表示内核回收用于directory和inode cache内存的倾向；缺省值100表示内核将根据pagecache和swapcache，把directory和inode cache保持在一个合理的百分比；降低该值低于100，将导致内核倾向于保留directory和inode cache；增加该值超过100，将导致内核倾向于回收directory和inode cache
+
+在innodb线程很多的机器上，或是部署了很多的实例的机器上，可能会遇到EAGAIN: The specified maxevents exceeds the user's limit of available events.错误，需要调大
+/proc/sys/fs/aio-max-nr.这个参数的意思是 同时可以拥有的的异步IO请求数目，oracle在安装的时候也是需要调整的。
+
+
+
+
+
+
+
+
+下面的两个参数是在脚本中配置了的
+echo "vm.dirty_background_ratio = 5" >> /etc/sysctl.conf
+echo "vm.dirty_ratio = 10" >> /etc/sysctl.conf
+
+需要注意cpu的模式
+Make sure there is no powersave mode enabled:
+Check /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+and make sure it is not ondemand
+Check /proc/cpuinfo and compare cpu MHz number to what is listed under the “model name”
+Disable the “ondemand” if it is running
+
+检查/proc/cpuinfo中的model_name中的频率值与cpu MHz中的值是否一样

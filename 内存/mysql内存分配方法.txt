@@ -1,0 +1,8 @@
+ With jemalloc (along with Transparent Huge Pages disabled) you have less memory fragmentation, and thus more efficient resource management of the available server memory.
+ 
+ 官方的对比测试
+ 
+ https://www.percona.com/blog/2012/07/05/impact-of-memory-allocators-on-mysql-performance/
+ 
+ https://www.percona.com/blog/2012/07/05/impact-of-memory-allocators-on-mysql-performance/
+ 

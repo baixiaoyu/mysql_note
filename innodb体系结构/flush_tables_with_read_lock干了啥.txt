@@ -1,0 +1,200 @@
+这个链接写的更好，更详细
+https://www.cnblogs.com/cchust/p/4603599.html
+
+https://www.percona.com/blog/2012/03/23/how-flush-tables-with-read-lock-works-with-innodb-tables/
+
+这个说的是在5.5版本之前，flush tables with read lock会被别的select阻塞。
+
+flush table会关闭所有打开的表，强制使用表关闭，刷新query cache及预编译语句的缓存。
+
+flush tables with read lock会关闭所有打开的表，使用全局的读锁锁住所有的表。这个锁是全局的，不是表锁。
+
+FLUSH TABLES WITH READ LOCK获取全局读取锁而不是表锁，因此它与表锁和隐式提交相关的行为与LOCK TABLES和UNLOCK TABLES不同。
+
+只有在当前任何表已被锁定表锁定的情况下，UNLOCK TABLES才隐含地提交任何活动事务。 对于FLUSH TABLES WITH READ LOCK之后的UNLOCK TABLES，不会发生提交，因为后面的语句不会获取表锁。
+
+开始事务会导致释放使用LOCK TABLES获取的表锁，就像您执行了UNLOCK TABLES一样。 开始事务不会释放用FLUSH TABLES WITH READ LOCK获取的全局读锁。
+
+试验见下方
+
+
+flush tables tb1,tb2 with read lock 这个语句获取指定表的读锁，首先获取表的排他元数据锁，等待打开这些表的事务完成，然后在表缓存中刷新这个表，重新打开，获取锁，降低元数据锁到共享模式。
+
+关于lock table的锁的测试：
+1 lock tables 的测试
+
+session 1:
+
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> insert into bai values(4,'dd',44);
+Query OK, 1 row affected (0.00 sec)
+
+session 2:
+mysql> select * from bai;
++----+------+-----+
+| id | name | age |
++----+------+-----+
+|  1 | a    |  10 |
+|  2 | bb   |  11 |
+|  3 | cc   |  33 |
++----+------+-----+
+
+
+session 1:
+mysql> lock tables bai read;   flush tables with read lock效果是一样的额，也是隐式提交了，如果这个lock语句是在别的会话中执行的，那么不会产生隐式提交。在我的测试中，会话a使用lock tables语句后，别的会话是无法插入数据的。
+Query OK, 0 rows affected (0.00 sec)
+
+session 2:
+mysql> select * from bai;
++----+------+-----+
+| id | name | age |
++----+------+-----+
+|  1 | a    |  10 |
+|  2 | bb   |  11 |
+|  3 | cc   |  33 |
+|  4 | dd   |  44 |
++----+------+-----+
+
+
+mysql> insert into bai values(5,'ee',55);卡住
+
+可以看到回话1中执行了lock的语句后，直接就给隐式提交了。
+
+
+
+---------------test 2----------
+session 1:
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> lock tables bai_test write;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> insert into bai_test values(66,'dddd',now());
+Query OK, 1 row affected (0.00 sec)
+
+mysql> unlock tables;
+Query OK, 0 rows affected (0.00 sec)
+
+session 2:
+mysql> select * from bai_test;
++----+------+---------------------+
+| id | code | createtime          |
++----+------+---------------------+
+|  1 | aa   | 2018-04-11 10:51:48 |
+|  2 | bb   | 2018-04-11 10:52:32 |
+|  3 | cc   | 2018-04-11 10:53:15 |
+| 66 | dddd | 2018-04-11 10:55:27 |
++----+------+---------------------+
+
+看到unlock tables语句直接将事务提交了
+
+--------test3------
+
+session1:
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> insert into bai_test values(777,'rrrr',now());
+Query OK, 1 row affected (0.00 sec)
+
+
+sesison 2:
+mysql> flush tables with read lock;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> select * from bai_test;
++----+------+---------------------+
+| id | code | createtime          |
++----+------+---------------------+
+|  1 | aa   | 2018-04-11 10:51:48 |
+|  2 | bb   | 2018-04-11 10:52:32 |
+|  3 | cc   | 2018-04-11 10:53:15 |
+| 66 | dddd | 2018-04-11 10:55:27 |
++----+------+---------------------+
+4 rows in set (0.01 sec)
+
+mysql> unlock tables;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> select * from bai_test;
++----+------+---------------------+
+| id | code | createtime          |
++----+------+---------------------+
+|  1 | aa   | 2018-04-11 10:51:48 |
+|  2 | bb   | 2018-04-11 10:52:32 |
+|  3 | cc   | 2018-04-11 10:53:15 |
+| 66 | dddd | 2018-04-11 10:55:27 |
++----+------+---------------------+
+4 rows in set (0.00 sec)
+
+看到flush tables with read lock语句没有被阻塞，并且unlock table语句页没有隐式提交。
+
+
+------test 3----
+继续接上面的测试，session1的事务不提交，在session 2中进行下面的操作
+
+mysql> select * from bai_test;
++----+------+---------------------+
+| id | code | createtime          |
++----+------+---------------------+
+|  1 | aa   | 2018-04-11 10:51:48 |
+|  2 | bb   | 2018-04-11 10:52:32 |
+|  3 | cc   | 2018-04-11 10:53:15 |
+| 66 | dddd | 2018-04-11 10:55:27 |
++----+------+---------------------+
+4 rows in set (0.00 sec)
+
+mysql> show open tables;
++----------+----------+--------+-------------+
+| Database | Table    | In_use | Name_locked |
++----------+----------+--------+-------------+
+| test     | bai_test |      0 |           0 |
++----------+----------+--------+-------------+
+1 row in set (0.00 sec)
+
+mysql> flush tables with read lock;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> show open tables;
+Empty set (0.00 sec)
+
+mysql> unlock tables;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> show open tables;
+Empty set (0.00 sec)
+
+
+
+------test4 ----
+事务开始会释放lock tables的锁
+mysql> lock tables bai_test read;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> insert into bai_test values(888,'yyyy',now());
+Query OK, 1 row affected (0.00 sec)
+
+但是不会释放flush tables with read lock的锁
+
+mysql> flush tables with read lock;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> insert into bai_test values(888,'yyyy',now());
+ERROR 1223 (HY000): Can't execute the query because you have a conflicting read lock
+
+
+
+
+
+
+
+

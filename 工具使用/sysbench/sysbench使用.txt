@@ -1,0 +1,51 @@
+创建了10个表，然后插入了500万数据来测试。
+sysbench /home/sysbench/sysbench-1.0.3/src/lua/oltp_read_write.lua --mysql-user=root --mysql-port=3308 --mysql-socket=/home/mysql_5.7.17/mysql.sock --mysql-host=localhost --mysql-db=sysbenchtest --tables=20 --table-size=5000000 --threads=50 prepare
+
+
+
+/usr/sysbench/bin/sysbench /usr/sysbench/share/sysbench/oltp_read_write.lua --mysql-user=root --mysql-port=8888  --mysql-host=xx.142.230 --mysql-password=123456 --mysql-db=test --tables=50 --table-size=5000000 --threads=50 prepare
+
+
+
+
+
+下面的语句是有问题的，这个语句只能在sbtest1上操作，别的表没法使用
+/usr/sysbench/bin/sysbench /usr/sysbench/share/sysbench/oltp_read_write.lua --mysql-user=root --mysql-password=xx --mysql-port=3334 --mysql-host=xx.142.230 --mysql-db=test --threads=100 --time=600 run
+
+--向一个表中插入500w数据
+/usr/sysbench/bin/sysbench /usr/sysbench/share/sysbench/oltp_insert.lua --mysql-user=root --mysql-password=xx --mysql-port=8888 --mysql-host=xx.142.230 --mysql-db=test --table-size=5000000 --threads=100  run
+
+
+这个命令才是正常的压测命令，sysbench在测试完成后，表中的数据量其实是没有变化的。
+/usr/sysbench/bin/sysbench /usr/sysbench/share/sysbench/oltp_read_write.lua --mysql-user=root --mysql-port=8888  --mysql-host=xx.142.230 --mysql-password=123456 --mysql-db=test --tables=50 --table-size=5000000 --threads=100  --time=600 run
+
+
+rate参数的具体含义还是不太清楚，控制sysbench的速度，模拟不同的压力呗
+time sysbench --threads=40 --rate=1000 --report-interval=1 --percentile=99 --events=0 --time=0 --db-ps-mode=auto --mysql-user=sbtest --mysql-password=sbtest ?/usr/share/sysbench/oltp_read_write.lua --table_size=10000000 run
+
+
+清理测试数据
+sysbench --test=/usr/share/doc/sysbench/tests/db/parallel_prepare.lua \
+--mysql-user=user --mysql-password='passwd' --mysql-port=3306 \
+--mysql-host=xxx--oltp-tables-count=16 --num-threads=8 cleanup
+
+
+
+
+
+查看主从延迟，使用pt-heartbeat来完成。
+开启后台任务:
+pt-heartbeat h='xxx',u='pt_checksum',p='pt_checksum',P=3307 -D sysbenchtest --create-table --interval=1 --update --replace --daemonize开启主从延迟检测：
+pt-heartbeat h='xxx',u='pt_checksum',p='pt_checksum',P=3308 -D sysbenchtest --table=heartbeat --monitor --master-server-id=3308 --frames=5s --interval=5 
+因为主从复制在5.6， 5.7还是存在一定的差别，我们就分别测试单线程和多线程复制的差别和改进点。
+
+
+-----老版本的写法
+sysbench --test=oltp 
+--oltp-table-size=1000000 --mysql-db=dbtest --mysql-user=msandbox 
+--mysql-password=msandbox --mysql-socket=/tmp/mysql_sandbox5537.sock 
+--db-driver=mysql --oltp-auto-inc=off
+
+
+
+

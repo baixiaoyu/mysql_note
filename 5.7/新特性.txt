@@ -1,0 +1,100 @@
+安全性提升
+my5.7.23开始支持caching_sha2_password  客户端认证插件，为了跟8版本或更高版本匹配。
+
+可以设置账号密码过期
+可以锁定解锁账号
+在mysqld --initialize 过程中，更加安全，
+sql mode的改变，默认是 (STRICT_TRANS_TABLES) ，默认ONLY_FULL_GROUP_BY, STRICT_TRANS_TABLES, NO_ZERO_IN_DATE, NO_ZERO_DATE, ERROR_FOR_DIVISION_BY_ZERO, NO_AUTO_CREATE_USER, and NO_ENGINE_SUBSTITUTION.
+
+
+5.9 加快recovery
+MySQL 5.7.5之前，在recovery的过程中，需要扫描所有的ibd文件，获取元信息， 5.7.5之后，新加了一种redo log类型，即MLOG_FILE_NAME， 记录从上一次checkpoint以来，发生过变更的文件，这样在recovery的过程中，只需要打开这些文件就可以了。
+[兼容性]
+因为增加了新的log record type，需要安全的关闭5.7之前的实例，清理掉redo。
+
+online ddl
+
+重命名一个索引，现在是 in place的，不是拷贝表的方式。
+varchar的增大可以使用in-place的alter table命令，适用的情况是长度字节仍然相同的情况，对于varchar 0到255，一个长度字节用来加密值，对于256字节或更大的值，2个长度字节用来加密值，所以in placce 的alter table只能支持0到255大小，或是值等于或高于256字节在增大。不支持小于256字节的长度扩大比256长，这种情况下长度字节从1变成了2，需要使用表拷贝的方式了。
+官网上的例子，字段从255增大到256，使用in place报错：
+ALTER TABLE t1 ALGORITHM=INPLACE, CHANGE COLUMN c1 c1 VARCHAR(256);
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change
+column type INPLACE. Try ALGORITHM=COPY.
+减小长度也只能使用表拷贝的方式。
+
+
+
+对于常规和压缩的临时表，一个新的非redo的undo被放置在临时表空间中。
+在线调整 innodb_buffer_pool_size 
+
+重建索引的时候使用bulk load,加快了创建速度，参数innodb_fill_factor指定了这个过程中的页填充率，留一些空白给后面索引增长用。
+
+一个新的日志记录类型mlog_file_name用来记录上次检查点依赖的变更，简化了crash恢复的过程中表空间的发现过程
+
+现在可以截断存在undo表空间中的的undo 日志了，参数innodb_undo_log_truncate控制这个功能。当undo大小超过了innodb_max_undo_log_size 的大小，可以进行截断。
+
+
+MySQL 5.7之前的版本，InnoDB并不支持分区表，分区表的支持是在ha_partition引擎上支持的，从5.7开始，InnoDB支持原生的分区表，并且可以使用传输表空间。innodb支撑本地分区，之前的版本中为每个分区创建一个handler对象，对于本地分区，一个分区表使用一个handler对象。这个降低了分区表需要的内存数量。
+
+dynamic替换了compact成为默认的表行格式，配置参数innodb_default_row_format指定了默认的innodb行格式。
+
+提供了sys模式，来方便定位问题。
+
+支持虚拟列，可以通过其他列计算生成列。可以支持函数索引的一种变相实现。
+
+优化器
+通过explain 查看之行计划
+可以在语句级别加hint
+prefer_ordering_index 设置，默认的，mysql总是使用order by，或带limit的group by上的顺序索引，一些情况下使用其他的优化方式可能更好，可以通过这个参数关闭这个优化。
+
+
+[兼容性]
+mysql_upgrade会扫描ha_partition引擎支持的InnoDB表，并升级成InnoDB分区表，5.7.9之后，可以通过命令ALTER TABLE … UPGRADE PARTITIONING.进行升级。如果之前的版本大量使用了分区表，要注意使用mysql_upgrade会消耗非常长的时间来升级分区表。
+
+
+
+
+5.6 NVM file system
+MySQL 一直使用double write buffer来解决一个page写入的partial write问题，但在linux系统上的Fusion-io Non-Volatile Memory (NVM) file system支持原子的写入。
+这样就可以省略掉double write buffer的使用， 5.7.4以后，如果Fusion-io devices支持atomic write，那么MySQL自动把dirty block直接写入到数据文件了。这样减少了一次内存copy和IO操作。
+
+
+
+5.4 buffer pool dump
+buffer pool dump和load支持一个新的参数innodb_buffer_pool_dump_pct，即dump的比例，并且使用innodb_io_capacity 来控制load过程中的IO吞吐量。
+
+
+
+5.2 优化InnoDB临时表
+因为InnoDB临时表的数据不再不受redo保护，而redo只保护临时表的元数据，所以大幅提升了临时表的性能。
+并且InnoDB临时表的元数据保存在一个新的系统表中即innodb_temp_table_info，
+临时表将建立一个统一的表空间，我们称之为临时表空间，其目录地址可以通过参数innodb_temp_data_file_path来设置。系统在启动的时候，都会新建这个表空间，重启会删除重建。
+index条件下推开始支持分区表
+
+多源复制
+
+
+5.5 多线程flush dirty
+从5.7.4开始，innodb_page_cleaners参数可以设置，支持多线程flush dirty page，加快脏块的刷新。
+
+组复制，添加的监控视图
+replication_applier_configuration
+
+replication_applier_status
+
+replication_applier_status_by_coordinator
+
+replication_applier_status_by_worker
+
+replication_connection_configuration
+
+replication_connection_status
+
+replication_group_members
+
+replication_group_member_stats
+
+
+dump线程的优化
+
+在MySQL5.7.2之前，每当读取事件时，转储线程都会在二进制日志上设置一个锁；在MySQL5.7.2及更高版本中，只有在读取最后一个成功写入的事件末尾的位置时才会设置这个锁。这意味着多个转储线程现在可以同时读取二进制日志文件，并且转储线程现在可以在客户端写入二进制日志时读取。

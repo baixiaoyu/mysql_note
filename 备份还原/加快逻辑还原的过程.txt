@@ -1,0 +1,16 @@
+可以考虑设置下面的参数
+--innodb_buffer_pool_size=4GB
+--innodb_log_file_size=1G
+--skip-log-bin
+--innodb_flush_log_at_trx_commit=0
+--innodb_io_capacity=700
+--innodb_io_capacity_max=1500
+--max_allowed_packet=1G
+--innodb_doublewrite=0
+
+
+在高并发的情况下，自适应hash可能导致锁竞争，需要关闭这个功能。
+
+
+
+

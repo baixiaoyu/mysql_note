@@ -1,0 +1,5 @@
+mysqlslap --auto-generate-sql --concurrency=100 --iterations=10
+
+mysqlslap --no-drop --create-schema=employees
+--query="select * from employees.employees;" --
+concurrency=1 --iterations=100

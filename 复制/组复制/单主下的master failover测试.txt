@@ -1,0 +1,60 @@
+kill掉master后，在另外2个机器上查看日志：
+server1:
+2017-11-13T03:22:10.490795Z 0 [Note] Plugin group_replication reported: 'getstart group_id 8127f1d'
+2017-11-13T03:22:11.097561Z 0 [Note] Plugin group_replication reported: 'Unsetting super_read_only.'
+2017-11-13T03:22:11.097610Z 81 [Note] Plugin group_replication reported: 'A new primary was elected, enabled conflict detection until the new primary applies all relay logs'
+
+
+server2：
+2017-11-13T03:22:10.389691Z 0 [Note] Plugin group_replication reported: '[GCS] Removing members that have failed while processing new view.'
+2017-11-13T03:22:10.490522Z 0 [Note] Plugin group_replication reported: 'getstart group_id 8127f1d'
+2017-11-13T03:22:11.097528Z 0 [Note] Plugin group_replication reported: 'Setting super_read_only.'
+2017-11-13T03:22:11.097572Z 52 [Note] Plugin group_replication reported: 'A new primary was elected, enabled conflict detection until the new primary applies all relay logs'
+
+
+在日志中可以看到是将server1选中成为新的master了，验证确实如此，在5.7.18版本中，没有指定节点优先级的参数，在5.7.20版本中才有，所以这个新master在低版本中是不可选择的。
+mysql> select * from performance_schema.replication_group_members where member_id=(select variable_value from performance_schema.global_status where variable_name='group_replication_primary_member');
++---------------------------+--------------------------------------+-------------------------+-------------+--------------+
+| CHANNEL_NAME              | MEMBER_ID                            | MEMBER_HOST             | MEMBER_PORT | MEMBER_STATE |
++---------------------------+--------------------------------------+-------------------------+-------------+--------------+
+| group_replication_applier | 882bc2e2-3b9f-11e7-9825-5254005bf35b | hz-10-200-142-50.h.lmlc |        4444 | ONLINE       |
++---------------------------+--------------------------------------+-------------------------+-------------+--------------+
+
+
+将master恢复过来，看看是什么情况，从下面的结果中可以看到，在master启动后，没有加入到组中。
+mysql> select * from performance_schema.replication_group_members;                                                       
++---------------------------+--------------------------------------+-------------------------+-------------+--------------+
+| CHANNEL_NAME              | MEMBER_ID                            | MEMBER_HOST             | MEMBER_PORT | MEMBER_STATE |
++---------------------------+--------------------------------------+-------------------------+-------------+--------------+
+| group_replication_applier | 882bc2e2-3b9f-11e7-9825-5254005bf35b | hz-10-200-142-50.h.lmlc |        4444 | ONLINE       |
+| group_replication_applier | 88528981-781a-11e7-b1d6-5254005bf35b | hz-10-200-142-50.h.lmlc |        8888 | ONLINE       |
++---------------------------+--------------------------------------+-------------------------+-------------+--------------+
+2 rows in set (0.00 sec)
+
+
+下面在将server1宕掉，看看是什么情况，在server2上看到信息，说明这个情况下我的集群是无法写入了，只能读取的状态
+mysql> show variables like '%super%';
++-----------------+-------+
+| Variable_name   | Value |
++-----------------+-------+
+| super_read_only | ON    |
++-----------------+-------+
+1 row in set (0.00 sec)
+
+mysql> select * from performance_schema.replication_group_members; 
++---------------------------+--------------------------------------+-------------------------+-------------+--------------+
+| CHANNEL_NAME              | MEMBER_ID                            | MEMBER_HOST             | MEMBER_PORT | MEMBER_STATE |
++---------------------------+--------------------------------------+-------------------------+-------------+--------------+
+| group_replication_applier | 882bc2e2-3b9f-11e7-9825-5254005bf35b | hz-10-200-142-50.h.lmlc |        4444 | UNREACHABLE  |
+| group_replication_applier | 88528981-781a-11e7-b1d6-5254005bf35b | hz-10-200-142-50.h.lmlc |        8888 | ONLINE       |
++---------------------------+--------------------------------------+-------------------------+-------------+--------------+
+2 rows in set (0.00 sec)
+
+
+再次启动server1后，也是没有自动的添加到集群中，server2的状态依然如上。在server1上必须先停止组复制，然后再开启，stop group_replication; start group_replication;
+
+
+
+
+
+

@@ -1,0 +1,13 @@
+在社区版本中的多源复制在建立的时候，需要指定渠道的名称，否则没有渠道名，无法区别
+
+CHANGE MASTER TO MASTER_HOST='192.168.10.128',MASTER_USER='repl', MASTER_PASSWORD='123456',MASTER_LOG_FILE='Master_1-bin.000001',MASTER_LOG_POS=1539 FOR CHANNEL 'Master_1';
+
+指定渠道名来启动
+start slave for CHANNEL  'Master_1';
+
+SHOW SLAVE STATUS FOR CHANNEL 'Master_1'\G
+
+也可以通过查看performance_schema相关的表查看同步状态，执行命令：SELECT * FROM performance_schema.replication_connection_status; 监控复制状态
+
+
+这里要忽略掉一些不用的库，然后在导出的时候使用的是导出指定的业务库，不包含系统库

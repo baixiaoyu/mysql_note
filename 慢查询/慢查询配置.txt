@@ -1,0 +1,22 @@
+* LAMP环境的安装
+* 
+    * 安装apache，yum install httpd httpd-devel
+    * 安装php，yum install php php-mysql php-common php-bcmath php-dba php-cli php-gd php-mbstring php-mcrypt php-devel php-xml php-pdo
+    * vim /etc/php.ini，date.timezone = PRC
+
+* LAMP环境的启动，/etc/init.d/httpd start
+* 下载anemometer，并且解决放到放到/var/www/html文件夹下
+* cd conf/，cp sample.config.inc.php  config.inc.php
+* 修改配置文件指向数据源数据库
+* 
+    * 初始化数据源的数据库表的配置，mysql -uroot -p123456 < install.sql，每个datasource源头可以对应不同的数据库database（修改install.sql的内容）
+    * 上一步的database数据库是每个慢查询的datasource源头指向的数据库
+    * 修改配置文件，vim conf/datasource_localhost.inc.php（不同的慢查询源可以单独一个配置文件）
+
+* 推送慢查询并配置执行explain执行计划
+* 
+    * 每台慢查询主机上授予权限，grant select on *.* to 'anemometer'@'10.200.141.21' identified by  'Qazwer@1345~';flush privileges;
+    * vim config.inc.php，修改plugin标签的用户名和密码，账号密码为访问慢查询主机的账号权限，相当于需要去慢查询主机上进行数据库执行计划的explain
+    * 慢查询主机推送的脚本需要将hostname和对应的端口号一并发送过来（同时借助percona-tool工具的pt-query-digest）
+    * 对于anemometer的主机上，需要进行慢查询主机hostname和ip的映射
+* 慢查询脚本的内容（具体可在线上数据的/home/dba_scripts文件目录下查看）

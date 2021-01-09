@@ -1,0 +1,7 @@
+查看授权
+pt-show-grants  --separate --host=xxx --port=3363 --revoke --only=bigdata
+
+显示指定用户的授权，包含回收语句 
+pt-show-grants –separate –host=xxx –port=xxx–revoke –only=baixyu,root 
+显示授权，删除，刷新语句 
+pt-show-grants –separate –host=xx –port=xx –flush –revoke –only=baixyu,root –drop

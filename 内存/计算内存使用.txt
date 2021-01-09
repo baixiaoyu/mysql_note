@@ -1,0 +1,32 @@
+mysql> select ((@@key_buffer_size+@@innodb_buffer_pool_size+@@innodb_log_buffer_size+@@innodb_additional_mem_pool_size+@@net_buffer_length+@@query_cache_size)/1024/1024/1024)+((@@sort_buffer_size+@@myisam_sort_buffer_size+@@read_buffer_size+@@join_buffer_size+@@read_rnd_buffer_size+@@thread_stack)/1024/1024/1024*250);
+
+
+5.7
+
+select ((@@key_buffer_size+@@innodb_buffer_pool_size+@@innodb_log_buffer_size+@@net_buffer_length+@@query_cache_size)/1024/1024/1024)+((@@sort_buffer_size+@@myisam_sort_buffer_size+@@read_buffer_size+@@join_buffer_size+@@read_rnd_buffer_size+@@thread_stack)/1024/1024/1024*250);
+
+
+
+##MySQL 最大可使用内存（ M ）： 
+
+ 
+SELECT 
+  (
+    @@key_buffer_size + @@innodb_buffer_pool_size + @@query_cache_size + @@tmp_table_size + @@max_connections * (
+      @@read_buffer_size + @@read_rnd_buffer_size + @@sort_buffer_size + @@join_buffer_size + @@binlog_cache_size + @@thread_stack
+    )
+  ) / 1024 / 1024 AS result 
+  
+ ##MySQL 单个连接最大可使用内存（ M ）： 
+   
+  SELECT 
+    (
+      @@read_buffer_size + @@read_rnd_buffer_size + @@sort_buffer_size + @@join_buffer_size + @@binlog_cache_size + @@thread_stack
+    ) / 1024 / 1024 AS result 
+ 
+##MySQL 最大可使用内存（不包含连接占用内存）（ M ）： 
+ 
+    SELECT 
+      (
+        @@key_buffer_size + @@innodb_buffer_pool_size + @@query_cache_size + @@tmp_table_size
+      ) / 1024 / 1024 AS result

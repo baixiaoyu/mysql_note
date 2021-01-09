@@ -1,0 +1,11 @@
+这两个表在我们使用的版本中都是online操作的了。
+analyze的问题
+https://www.percona.com/blog/2013/02/27/mysql-optimizer-analyze-table-and-waiting-for-table-flush/
+
+
+为什么要optimize表
+
+
+Insertions with random keys can result in a tree with underutilized leaf blocks.  Many tree algorithms split nodes in half when they become full.  If these nodes are stored in fixed sized blocks, like many B-trees do, then there can be a lot of wasted space.  Table optimization of B-trees write blocks with less fragmentation.  In contrast, Fractal Tree indexes do not have this problem since we use variable sized blocks.
+As B-tree’s age, the leaf nodes that are adjacent in the key sort order are spread all over the disk.  As a result, range queries spend a lot of time waiting on disk seeks.  Table optimization builds a new tree with leaf blocks written in sort order.  In contrast, Fractal Tree indexes do not have this problem since we write very large blocks.
+TokuDB’s Fractal Tree indexes may need to be optimized to take advantage of all the latest and greatest algorithms delivered in newer versions of the software.  For example, basement nodes were recently introduced into the TokuDB product.  Table optimization converts blocks from the old format to the new format, which results in much better performance.

@@ -1,0 +1,27 @@
+安装
+yum install perl
+yum install cpan
+yum install perl-DBI perl-DBD-MySQL perl-TermReadKey -y
+可以在管理机器上配置多个连接
+innotop -h localhost -uroot -S /tmp/mysql_3309.sock -d 2 
+
+使用：
+查看状态变量press 'S'
+按shift+q进入sql查询列表
+然后按e并输入thread ID显示执行计划或者按f显示完整sql语句
+配置连接输入innotop --write进入后退出，会在用户的当前目录下面生成.innotop/innotop.conf文件，在改文件中添加连接，连接很多的时候需要进行分组。
+在配置文件中添加分组，如下：
+[server_groups]
+
+data=master69 slave69
+
+[/server_groups]
+在界面上选择时候，分组是#开头的
+
+
+
+在配置文件配置innotop的连接
+ innotop --write，进入交互式界面后退出。会在当前目录下生成一个.innotop/innotop.conf
+
+在监控的界面中使用n查看下一个连接的信息，使用@选择查看指定的连接的信息
+

@@ -1,0 +1,2 @@
+gap 锁是一个范围
+next key锁是gap锁+下一个值

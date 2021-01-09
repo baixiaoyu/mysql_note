@@ -1,0 +1,1 @@
+https://www.percona.com/blog/2016/03/28/mysql-5-7-primary-key-lookup-results-is-it-really-faster/

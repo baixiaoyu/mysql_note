@@ -1,0 +1,14 @@
+mysql是单进程，多线程的结构
+
+master线程
+主要负责将缓冲池中的数据异步刷到磁盘，包括脏页的刷新，合并插入缓冲，undo页的回收等
+
+5.7新增clean线程刷脏页
+
+iothread
+之前有4个io thread write read insert buffer log io thread
+在1.2版本之后，有多个purge thread，为了进一步加快undo页的回收，
+page cleaner thread这个是将之前的刷脏页的操作放到单独的线程中完成，减轻master thread的压力，这个cleaner线程跟write thread不是一个东西？
+
+
+参数innodb_purge_batch_size控制刷新undo的量。

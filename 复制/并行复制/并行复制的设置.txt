@@ -1,0 +1,22 @@
+在mysql5.7的版本中，下面的2个参数控制着并行复制
+mysql> show variables like 'slave_para%';
++------------------------+----------+
+| Variable_name          | Value    |
++------------------------+----------+
+| slave_parallel_type    | DATABASE |
+| slave_parallel_workers | 0        |
++------------------------+----------+
+2 rows in set (0.00 sec)
+
+上面的值是默认值。
+
+slave_parallel_workers这个参数控制着slave上的sql线程数，如果这个值大于0，那么slave_parallel_type这个值就是控制着哪种事务在从库上被允许并发执行。可以有下面的2个值
+database:更新不同数据库的事务可以被并行应用，这个参数只是适合于数据在不同的库上，并且在master上被单独的并发更新，没有跨库的事务。
+
+logical_clock:这个参数是指那些在相同的二进制日志组提交中的事务可以被并发应用。这个就没有上面的约束了。
+
+同时推荐使用gtid的配置，能避免一些意外的问题。
+
+https://www.percona.com/blog/2016/02/10/estimating-potential-for-mysql-5-7-parallel-replication/
+https://www.percona.com/blog/2015/01/29/multi-threaded-replication-with-mysql-5-6-use-gtids/
+

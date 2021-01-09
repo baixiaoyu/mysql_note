@@ -1,0 +1,13 @@
+https://www.percona.com/blog/2013/10/30/innodb-adaptive-flushing-in-mysql-5-6-checkpoint-age-and-io-capacity/
+
+
+自适应刷新中，刷新的脏块的比率是有个公式的，在这个公式中，innodb_io_capacity_max占的影响的比率是比较大的。
+
+https://www.percona.com/blog/2013/10/30/innodb-adaptive-flushing-in-mysql-5-6-checkpoint-age-and-io-capacity/
+
+http://mysqlha.blogspot.jp/2013/05/mysql-56-flushing-potential.html
+
+
+刷脏块的问题在之前的版本中貌似问题很多
+
+https://www.percona.com/blog/2011/09/18/disaster-mysql-5-5-flushing/

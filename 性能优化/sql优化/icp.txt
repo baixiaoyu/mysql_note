@@ -1,0 +1,146 @@
+
+查看优化器配置
+show variables like 'optimizer_switch%' \G;
+
+
+
+mysql> select name from information_schema.innodb_metrics where name like 'icp%';
++------------------+
+| name             |
++------------------+
+| icp_attempts     |
+| icp_no_match     |
+| icp_out_of_range |
+| icp_match        |
++------------------+
+
+icp_attempts: the number of rows where ICP was evaluated
+icp_no_match: the number of rows that did not completely match the pushed WHERE conditions
+icp_out_of_range: the number of rows that were checked that were not in a valid scanning range
+icp_match: the number of rows that completely matched the pushed WHERE conditions
+
+
+效率对比
+Using where：表示优化器需要通过索引回表查询数据；
+
+Using index：表示直接访问索引就足够获取到所需要的数据，不需要通过索引回表；
+
+Using index condition：在5.6版本后加入的新特性（Index Condition Pushdown）;
+
+using index & using where：查找使用了索引，但是需要的数据都在索引列中能找到，所以不需要回表查询数据
+
+
+下面的测试完美的解释了上面的概念
+
+
+| baixyu | CREATE TABLE `baixyu` (
+  `TABLE_CATALOG` varchar(512) CHARACTER SET utf8 NOT NULL DEFAULT '',
+  `TABLE_SCHEMA` varchar(64) CHARACTER SET utf8 NOT NULL DEFAULT '',
+  `TABLE_NAME` varchar(64) CHARACTER SET utf8 NOT NULL DEFAULT '',
+  `TABLE_TYPE` varchar(64) CHARACTER SET utf8 NOT NULL DEFAULT '',
+  `ENGINE` varchar(64) CHARACTER SET utf8 DEFAULT NULL,
+  `VERSION` bigint(21) unsigned DEFAULT NULL,
+  `ROW_FORMAT` varchar(10) CHARACTER SET utf8 DEFAULT NULL,
+  `TABLE_ROWS` bigint(21) unsigned DEFAULT NULL,
+  `AVG_ROW_LENGTH` bigint(21) unsigned DEFAULT NULL,
+  `DATA_LENGTH` bigint(21) unsigned DEFAULT NULL,
+  `MAX_DATA_LENGTH` bigint(21) unsigned DEFAULT NULL,
+  `INDEX_LENGTH` bigint(21) unsigned DEFAULT NULL,
+  `DATA_FREE` bigint(21) unsigned DEFAULT NULL,
+  `AUTO_INCREMENT` bigint(21) unsigned DEFAULT NULL,
+  `CREATE_TIME` datetime DEFAULT NULL,
+  `UPDATE_TIME` datetime DEFAULT NULL,
+  `CHECK_TIME` datetime DEFAULT NULL,
+  `TABLE_COLLATION` varchar(32) CHARACTER SET utf8 DEFAULT NULL,
+  `CHECKSUM` bigint(21) unsigned DEFAULT NULL,
+  `CREATE_OPTIONS` varchar(255) CHARACTER SET utf8 DEFAULT NULL,
+  `TABLE_COMMENT` varchar(2048) CHARACTER SET utf8 NOT NULL DEFAULT '',
+  KEY `idx_name_schema` (`TABLE_NAME`,`TABLE_SCHEMA`),
+  KEY `idx_create_time` (`CREATE_TIME`),
+  KEY `idx_rows` (`TABLE_ROWS`),
+  KEY `idx_baixyu_version` (`VERSION`),
+  KEY `idx_baixyu_data_free` (`DATA_FREE`),
+  KEY `idx_row_format` (`ROW_FORMAT`),
+  KEY `idx_test` (`DATA_FREE`,`VERSION`),
+  KEY `idx_test1` (`VERSION`,`DATA_FREE`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 |
+
+
+mysql> set optimizer_switch = 'index_condition_pushdown=off';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> explain select * from baixyu where table_name='test' and table_schema='bb';
++----+-------------+--------+------+-----------------+-----------------+---------+-------------+------+-------------+
+| id | select_type | table  | type | possible_keys   | key             | key_len | ref         | rows | Extra       |
++----+-------------+--------+------+-----------------+-----------------+---------+-------------+------+-------------+
+|  1 | SIMPLE      | baixyu | ref  | idx_name_schema | idx_name_schema | 388     | const,const |    1 | Using where |
++----+-------------+--------+------+-----------------+-----------------+---------+-------------+------+-------------+
+1 row in set (0.00 sec)
+
+
+mysql> explain select count(*) from baixyu where table_name='test' and table_schema='bb';
++----+-------------+--------+------+-----------------+-----------------+---------+-------------+------+--------------------------+
+| id | select_type | table  | type | possible_keys   | key             | key_len | ref         | rows | Extra                    |
++----+-------------+--------+------+-----------------+-----------------+---------+-------------+------+--------------------------+
+|  1 | SIMPLE      | baixyu | ref  | idx_name_schema | idx_name_schema | 388     | const,const |    1 | Using where; Using index |
++----+-------------+--------+------+-----------------+-----------------+---------+-------------+------+--------------------------+
+
+mysql> set optimizer_switch = 'index_condition_pushdown=on';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> explain select count(*) from baixyu where table_name='test' and table_schema='bb';
++----+-------------+--------+------+-----------------+-----------------+---------+-------------+------+--------------------------+
+| id | select_type | table  | type | possible_keys   | key             | key_len | ref         | rows | Extra                    |
++----+-------------+--------+------+-----------------+-----------------+---------+-------------+------+--------------------------+
+|  1 | SIMPLE      | baixyu | ref  | idx_name_schema | idx_name_schema | 388     | const,const |    1 | Using where; Using index |
++----+-------------+--------+------+-----------------+-----------------+---------+-------------+------+--------------------------+
+1 row in set (0.00 sec)
+
+mysql> explain select * from baixyu where table_name='test' and table_schema='bb';
++----+-------------+--------+------+-----------------+-----------------+---------+-------------+------+-----------------------+
+| id | select_type | table  | type | possible_keys   | key             | key_len | ref         | rows | Extra                 |
++----+-------------+--------+------+-----------------+-----------------+---------+-------------+------+-----------------------+
+|  1 | SIMPLE      | baixyu | ref  | idx_name_schema | idx_name_schema | 388     | const,const |    1 | Using index condition |
++----+-------------+--------+------+-----------------+-----------------+---------+-------------+------+-----------------------+
+1 row in set (0.00 sec)
+
+看到对于count(*)的这种情况，不管是不是开启icp，都是用了using where & using index直接在索引中计算了。
+
+对于select * 的查询，开启icp后，还是使用了using index condition
+
+在补充下icp这个只是针对组合索引适用的，虽然单键的索引的执行计划显示使用了icp,但我不认为执行时间会有什么变化
+
+mysql> explain select * from baixyu where table_rows=1000;
++----+-------------+--------+------+---------------+----------+---------+-------+--------+-------------+
+| id | select_type | table  | type | possible_keys | key      | key_len | ref   | rows   | Extra       |
++----+-------------+--------+------+---------------+----------+---------+-------+--------+-------------+
+|  1 | SIMPLE      | baixyu | ref  | idx_rows      | idx_rows | 9       | const | 643584 | Using where |
++----+-------------+--------+------+---------------+----------+---------+-------+--------+-------------+
+1 row in set (0.01 sec)
+
+mysql> set optimizer_switch = 'index_condition_pushdown=on';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> explain select * from baixyu where table_rows=1000;
++----+-------------+--------+------+---------------+----------+---------+-------+--------+-----------------------+
+| id | select_type | table  | type | possible_keys | key      | key_len | ref   | rows   | Extra                 |
++----+-------------+--------+------+---------------+----------+---------+-------+--------+-----------------------+
+|  1 | SIMPLE      | baixyu | ref  | idx_rows      | idx_rows | 9       | const | 643584 | Using index condition |
++----+-------------+--------+------+---------------+----------+---------+-------+--------+-----------------------+
+1 row in set (0.00 sec)
+
+
+off的时候执行完了2.48s
+
+on的时候执行2.39s还是有提升的。
+
+
+普通的理解上就是对复合索引有效果，在没使用的时候，先按前缀键扫描索引到存储层获取所有的数据，然后到server层在根据别的索引键过滤，开启后时直接将整个索引推入到存储引擎层过滤。但是通过单键索引的测试好像也不是这么回事。
+
+看官网上的解释就是针对复合索引有效：https://dev.mysql.com/doc/refman/5.6/en/index-condition-pushdown-optimization.html
+
+
+
+
+
+

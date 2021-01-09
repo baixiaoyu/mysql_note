@@ -1,0 +1,27 @@
+mysql的统计信息由下面的几个参数控制：
+
+
+ innodb_stats_sample_pages 动态采样页数量，这个参数已经被废弃了，用下面的两个参数顶替
+ innodb_stats_transient_sample_pages  这个参数只有在innodb_stats_persistent禁用的时候起作用，如果innodb_stats_persistent开启了，起作用的是下面的参数。 
+ innodb_stats_persistent_sample_pages
+ 上面的2个参数控制的是在对索引列进行评估行数和别的统计信息时的采样的索引页数量。
+ or by the  CREATE TABLE option STATS_SAMPLE_PAGES
+ 
+ 在列上的唯一值的数量比较少的时候，列上的索引的统计信息可能会出现问题，下面测试下。
+ 
+ analyze table 不会产生阻塞，但是运行的时间长了会有别的问题产生。问题是如果这个表上有个长时间运行的sql,你对这个sql执行了analyze table语句，然后又很多对这个表的查询，那么在这个长sql执行结束之前，所有的查询都会被阻塞，因为analyze table在执行完后，需要flush table在重新打开。
+ 
+  FLUSH TABLES, ALTER, RENAME, OPTIMIZE or REPAIR can cause threads to wait on “Waiting for tables”, “Waiting for table” and “Waiting for table flush”.
+ 案例：https://www.percona.com/blog/2013/02/27/mysql-optimizer-analyze-table-and-waiting-for-table-flush/
+ 
+ innodb存放统计信息的地址是mysql库中的innodb_table_stats 与innodb_index_stats这两个表。
+ 
+ 下面构建测试数据测试下：
+ 
+https://dev.mysql.com/doc/refman/5.6/en/innodb-performance-optimizer-statistics.html
+
+
+啥时候手机统计信息
+https://www.percona.com/blog/2011/10/06/when-does-innodb-update-table-statistics-and-when-it-can-bite/在执行
+
+一些命令的时候会收集，可以通过参数innodb_stats_on_metadata关闭自动收集

@@ -1,0 +1,193 @@
+组复制模式下的要求：
+inoodb存储
+主键,冲突检测用
+ipv4
+网络性能，这个是协议要求
+ server设置
+二进制日志开启
+slave更新记录
+行格式
+gtid-mode=on
+复制信息写入表中
+Set --master-info-repository=TABLE and --relay-log-info-repository=TABLE.
+
+ Set --transaction-write-set-extraction=XXHASH64
+多线程应用
+ Set --slave-parallel-workers=N (where N is the number of parallel applier threads), --slave-preserve-commit-order=1, and --slave-parallel-type=LOGICAL_CLOCK. 
+
+
+
+配置单主的模式
+
+先独立安装3个实例，下面配置第一个实例，在选项文件中添加下面的配置
+[mysqld]
+
+# server configuration
+datadir=<full_path_to_data>/data/s1
+basedir=<full_path_to_bin>/mysql-5.7/
+
+port=24801
+socket=<full_path_to_sock_dir>/s1.sock
+
+server_id=1
+gtid_mode=ON
+enforce_gtid_consistency=ON
+master_info_repository=TABLE
+relay_log_info_repository=TABLE
+binlog_checksum=NONE
+log_slave_updates=ON
+log_bin=binlog
+binlog_format=ROW
+
+###下面是组复制需要的配置
+transaction_write_set_extraction=XXHASH64
+loose-group_replication_group_name="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+loose-group_replication_start_on_boot=off
+loose-group_replication_local_address= "10.200.142.49:24901"
+loose-group_replication_group_seeds= "10.200.142.49:24901,10.200.142.50:24902,10.200.142.50:24903"
+loose-group_replication_bootstrap_group= off
+
+#上面参数的配置说明
+https://dev.mysql.com/doc/refman/5.7/en/group-replication-configuring-instances.html,上面的组名称是uuid类型，不知道这个参数是需要设置成一致还是不一致的，我设置的是一直的，但是在成员id中看到的，组名变成了第一个server的id，其余2个节点的是别的uuid，确定需要配置成一致的
+
+启动实例后，登录创建复制用户
+mysql> SET SQL_LOG_BIN=0;
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> CREATE USER rpl_user@'%' identified by '123456';
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> GRANT REPLICATION SLAVE ON *.* TO rpl_user@'%' IDENTIFIED BY '123456';
+Query OK, 0 rows affected, 1 warning (0,00 sec)
+
+mysql> FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> SET SQL_LOG_BIN=1;
+Query OK, 0 rows affected (0,00 sec)
+
+为用户指定通道
+mysql> CHANGE MASTER TO MASTER_USER='rpl_user', MASTER_PASSWORD='123456' FOR CHANNEL 'group_replication_recovery';
+
+配置好第一个实例后，安装组复制插件
+
+INSTALL PLUGIN group_replication SONAME 'group_replication.so';
+
+查看插件是否成功安装show plugins;
+
+启动组，需要在一个server上执行
+
+SET GLOBAL group_replication_bootstrap_group=ON;
+START GROUP_REPLICATION;  --这个命令是需要所有的节点都配置好启动状态，这个命令会与所有的节点通讯，在执行这个命令之前，别的实例需要配置到安装完插件那步，参数文件中的相关参数需要修改
+SET GLOBAL group_replication_bootstrap_group=OFF;
+
+上面的启动命令成功执行后，查看下面的视图，会发现有一行记录
+ SELECT * FROM performance_schema.replication_group_members;
+
+----------------
+show binary logs;
+----------------
+第一个server配置好后，添加剩余的2个server，配置第二个server的配置文件
+[mysqld]
+
+# server configuration
+datadir=<full_path_to_data>/data/s2
+basedir=<full_path_to_bin>/mysql-5.7/
+
+port=24802
+socket=<full_path_to_sock_dir>/s2.sock
+
+#
+# Replication configuration parameters
+#
+server_id=2
+gtid_mode=ON
+enforce_gtid_consistency=ON
+master_info_repository=TABLE
+relay_log_info_repository=TABLE
+binlog_checksum=NONE
+log_slave_updates=ON
+log_bin=binlog
+binlog_format=ROW
+
+#
+# Group Replication configuration
+#
+transaction_write_set_extraction=XXHASH64
+loose-group_replication_group_name="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+loose-group_replication_start_on_boot=off
+loose-group_replication_local_address= "127.0.0.1:24902"
+loose-group_replication_group_seeds= "127.0.0.1:24901,127.0.0.1:24902,127.0.0.1:24903"
+loose-group_replication_bootstrap_group= off
+
+在2上面执行下面的语句
+SET SQL_LOG_BIN=0;
+CREATE USER rpl_user@'%';
+GRANT REPLICATION SLAVE ON *.* TO rpl_user@'%' IDENTIFIED BY 'rpl_pass';
+SET SQL_LOG_BIN=1;
+CHANGE MASTER TO MASTER_USER='rpl_user', MASTER_PASSWORD='rpl_pass' \\
+	FOR CHANNEL 'group_replication_recovery';
+
+
+mysql> INSTALL PLUGIN group_replication SONAME 'group_replication.so';
+
+把第二个节点添加到组中
+mysql> START GROUP_REPLICATION;
+检查下面的视图
+SELECT * FROM performance_schema.replication_group_members;
+
+在2上看下是否有1中的表
+SHOW BINLOG EVENTS;
+添加第三个server的过程与第二个server的过程是一致的。
+
+监控组复制
+1监控冲突的事务是否过多导致延时了
+select * from performance_schema.replication_group_member_stats;
+2查看成员
+select * from performance_schema.replication_group_members;
+3查看链接状态
+select * from performance_schema.replication_connection_status;
+
+4应用的状态
+select * from performance_schema.replication_applier_status;
+
+
+在单主模式下，只有一个serer是能读写的，通常第一个启动的server就是主server。别的server都是只读的。在这种模式中，主server挂掉后，会自动选出一个新的主server出来。
+选master的顺序是根据uuid按字面排序顺序选下一个。
+
+在单主的模式下，看哪个server是主
+
+SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME= 'group_replication_primary_member';
+下面的命令查看更加直接
+ select * from performance_schema.replication_group_members where member_id=(select variable_value from performance_schema.global_status where variable_name='group_replication_primary_member');
+
+
+查看恢复通道的信息，在下面的表中包含了通道配置的信息，复制的密码还是明文
+select * from slave_master_info\G
+
+
+
+
+
+如果节点中大部分的实例意外宕掉，则集群无法确定当前的集群由哪些节点组成，会发生脑裂的情况，这种情况下需要管理员介入处理。
+
+手工调整集群中的成员
+查看节点1的地址
+SELECT @@group_replication_local_address;
+查看节点2的地址
+ SELECT @@group_replication_local_address;
+使用下面的命令强制调整集群中的成员
+SET GLOBAL group_replication_force_members="127.0.0.1:10000,127.0.0.1:10001";
+
+需要确保排除去的节点是shutdown的状态，否则他们组成一个集群，就出现了脑裂的风险。
+
+
+---------------------------------------------多主模式的部署-----------------------
+
+多主模式下，下面的检查会被执行
+1 是否在序列化的隔离模式下进行的。
+2表上是否有配置外键并且使用了级联的约束
+
+
+
+

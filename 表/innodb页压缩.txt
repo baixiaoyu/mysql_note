@@ -1,0 +1,69 @@
+这个是5.7的功能，在之前的版本中是没有的
+innodb的页压缩需要稀疏文件和打孔支持，只在per table的设置下使用。
+工作方式在页写入的时候，使用指定的压缩算法进行压缩，打孔机制会在页的尾端清除空块，如果失败了，写入就跟普通的没区别了。
+在Linux系统上，文件系统块大小是用于打孔的单位大小。 因此，页面压缩仅适用于页面数据可以压缩到小于或等于InnoDB页面大小减去文件系统块大小的大小。 例如，如果innodb_page_size = 16K且文件系统块大小为4K，则页面数据必须压缩到小于或等于12K才能进行打孔。
+
+启用页压缩的方式：
+CREATE TABLE t1 (c1 INT) COMPRESSION="zlib";
+
+
+ALTER TABLE t1 COMPRESSION="zlib";---对旧数据不压缩
+OPTIMIZE TABLE t1;---如果要对旧数据进行压缩，需要执行这个语句。
+
+禁用压缩
+ALTER TABLE t1 COMPRESSION="None";
+OPTIMIZE TABLE t1;--如果要对现存的压缩数据进行解压，需要执行这句。
+
+查看压缩的元数据信息
+
+SELECT SPACE, NAME, FS_BLOCK_SIZE, FILE_SIZE, ALLOCATED_SIZE FROM INFORMATION_SCHEMA.INNODB_SYS_TABLESPACES WHERE NAME='employees/employees'\G
+
+
+页压缩的限制和使用注意点：
+如果文件系统的页大小*2>innodb_page_size的大小，那么这个功能是被禁用的。
+
+在共享表空间中是不能用的。
+对undo表空间不支持。
+r-tree的页，不被支持。
+对于属于压缩表的页不能使用。
+在不支持压缩算法的机器上加载数据，会产生io错误。
+在使用vnmfs的fusioin-io的硬件上，效果最好的。
+
+使用具有大InnoDB页面大小和相对较小的文件系统块大小的页面压缩功能可能导致写入放大。 例如，具有4KB文件系统块大小的最大InnoDB页面大小为64KB可能会提高压缩率，但也可能会增加对缓冲池的需求，从而导致I / O增加和潜在的写入放大
+	   
+	   
+	   
+与之前的版本的压缩不同的地方是，页压缩是使用了操作系统的打孔机制，页压缩可以手工的调整压缩与解压，表压缩那个是不能手工控制的。
+下面这些平台是支持这个功能的，我在redhat6平台上使用这个，本省是不支持的，设置后，optimize table后，表反而更大了。
+
+
+
+
+-rw-r----- 1 my3334 mysql        8814 Mar 13 14:04 history.frm
+-rw-r----- 1 my3334 mysql  3137339392 Mar 13 14:19 history.ibd
+
+
+-rw-r----- 1 my3334 mysql        8814 Mar 14 12:08 history.frm
+-rw-r----- 1 my3334 mysql  3581935616 Mar 14 12:10 history.ibd
+
+
+
+RHEL 7 and derived distributions that use kernel version 3.10.0-123 or higher
+
+OEL 5.10 (UEK2) kernel version 2.6.39 or higher
+
+OEL 6.5 (UEK3) kernel version 3.8.13 or higher
+
+OEL 7.0 kernel version 3.8.13 or higher
+
+SLE11 kernel version 3.0-x
+
+SLE12 kernel version 3.12-x
+
+OES11 kernel version 3.0-x
+
+Ubuntu 14.0.4 LTS kernel version 3.13 or higher
+
+Ubuntu 12.0.4 LTS kernel version 3.2 or higher
+
+Debian 7 kernel version 3.2 or higher

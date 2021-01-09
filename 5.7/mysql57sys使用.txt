@@ -1,0 +1,38 @@
+需要开启下面的工具
+CALL sys.ps_setup_enable_instrument('wait');
+CALL sys.ps_setup_enable_instrument('stage');
+CALL sys.ps_setup_enable_instrument('statement');
+CALL sys.ps_setup_enable_consumer('current');
+CALL sys.ps_setup_enable_consumer('history_long');
+使用下面的命令恢复默认的设置
+CALL sys.ps_setup_reset_to_default(TRUE);
+
+查看sys对象的定义
+mysql> SHOW CREATE VIEW sys.session;
+mysql> SHOW CREATE FUNCTION sys.format_bytes;
+
+sys包含的视图，对象
+https://dev.mysql.com/doc/refman/5.7/en/sys-schema-object-index.html
+https://dev.mysql.com/doc/refman/5.7/en/sys-schema-views.html
+
+监控表的访问量
+select table_schema,table_name,io_read_requests+io_write_requests as io_total from schema_table_statistics;
+
+冗余索引的监控
+select * from sys.schema_redundant_indexes\G;
+
+select * from sys.schema_unused_indexes;
+
+表自增id监控
+select * from schema_auto_increment_columns\G;
+
+监控全表扫描的sql
+
+select * from sys.statements_with_full_table_scans where db='test2'\G
+
+查看实例消耗磁盘io
+select file,avg_read+avg_write as avg_io from io_global_by_file_by_bytes order by avg_io desc limit 10;
+
+元数据锁信息，哪些会话拥有哪些元数据锁，哪些正在等待元数据锁，
+select * from metadata_locks;
+

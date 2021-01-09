@@ -1,0 +1,25 @@
+在oracle中针对一个固定的组合查询来说，需要创建组合索引，这个时候字段的顺序其实没什么特别注意的。但是在mysql中还是需要注意下字段的顺序。
+
+| infamous_table | CREATE TABLE `infamous_table` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `member_id` int(11) NOT NULL DEFAULT '0',
+  `email` varchar(200) NOT NULL DEFAULT '',
+  `msg_type` varchar(255) NOT NULL DEFAULT '',
+  `t2send` int(11) NOT NULL DEFAULT '0',
+  `flag` char(1) NOT NULL DEFAULT '',
+  `sent` varchar(100) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `f` (`flag`),
+  KEY `email` (`email`),
+  KEY `t_msg` (`t2send`,`msg_type`(5)),
+  KEY `idx_second` (`msg_type`(5),`t2send`)
+) ENGINE=InnoDB AUTO_INCREMENT=100001 DEFAULT CHARSET=utf8 |
+
+
+针对下面的查询，可以看到是使用了idx_second这个索引，没有使用t_msg，这2个索引只是定义的字段顺序不同而已，之前也有遇到过组合索引的顺序问题。
+mysql> explain  SELECT COUNT(*)   FROM `infamous_table`  WHERE `t2send` > 1234    AND `msg_type` LIKE 'prefix%';
++----+-------------+----------------+------------+-------+------------------+------------+---------+------+------+----------+------------------------------------+
+| id | select_type | table          | partitions | type  | possible_keys    | key        | key_len | ref  | rows | filtered | Extra                              |
++----+-------------+----------------+------------+-------+------------------+------------+---------+------+------+----------+------------------------------------+
+|  1 | SIMPLE      | infamous_table | NULL       | range | t_msg,idx_second | idx_second | 21      | NULL |    1 |   100.00 | Using index condition; Using where |
++----+-------------+----------------+------------+-------+------------------+------------+---------+------+------+----------+------------------------------------+

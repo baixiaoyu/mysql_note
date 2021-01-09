@@ -1,0 +1,4 @@
+blockdev --getra /dev/sdf
+
+blockdev --setra 4096 /dev/sdf
+

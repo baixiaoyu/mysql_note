@@ -1,0 +1,45 @@
+Non-GTID 推荐配置： relay_log_recovery=1，relay_log_info_repository=TABLE，master_info_repository=TABLE
+GTID 推荐配置：MASTER_AUTO_POSITION=on，relay_log_recovery=0，gtid-mode = ON enforce-gtid-consistency = ON
+在从库上配置super_read_only=on
+
+必须开启GTID
+binlog必须是row模式
+
+gtid_mode=ON
+enforce_gtid_consistency=ON
+log_slave_update=ON
+slave-parallel-type=LOGICAL_CLOCK
+slave-parallel-workers=16
+master_info_repository=TABLE
+relay_log_info_repository=TABLE
+relay_log_recovery=ON
+
+
+Non-GTID 推荐配置： relay_log_recovery=1, sync_relay_log=1,relay_log_info_repository=TABLE，master_info_repository=TABLE
+GTID 推荐配置： MASTER_AUTO_POSITION=on, relay_log_recovery=0
+
+因为gtid使用了server-uuid，那么这个值是要写到配置文件中？还是自动生成，自动生成的话重启后会变，会有什么影响？
+
+看官网上的server_uuid这个参数自动生成后会保存在data目录下的auto.cnf文件中，所以这个值在重启后也是不会变的。
+gtid和普通的复制不能同时存在
+
+
+ When slave connects to the master
+● Position-based replication
+– Master sends all transactions from the given offset
+● GTID-based replication
+– Sends the range of GTIDs it has executed
+– Master sends back all other transactions
+– Rule: a transaction with a given GTID can only execute
+once
+
+mysqldump
+● --master-data now includes GTID information
+● Reload the dump and run CHANGE MASTER TO …
+MASTER_AUTO_POSITION=1
+● Percona XtraBackup
+● xtrabackup_binlog_info contains GTID information
+● After moving the backup, run SET GLOBAL
+gtid_purged="XYZ"
+● Then run CHANGE MASTER TO …
+MASTER_AUTO_POSITION=1

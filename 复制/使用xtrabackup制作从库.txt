@@ -1,0 +1,27 @@
+1制作主库的全备份
+innobackupex --defaults-file=/data/mysql_9999/my9999.cnf --host=localhost --port=9999 --user=bkpuser --password=s3cret /data/dbatemp/backup/ 
+2拷贝备份数据到slave机器
+ rsync -Rr 2016-06-06_15-32-27/ dba@192.168.90.109::dbatemp/mysqldump/baixiaoyu  
+ rsync -Rr dba@192.168.90.109::dbatemp/mysqldump/baixiaoyu/2016-06-06_15-32-27 /data/dbatemp
+3关闭从库上mysqld服务，移动备份文件到数据目录下
+mv /data/dbatemp/mysqldump/baixiaoyu/2016-06-06_15-32-27/ /data/mysql_9999
+4修改授权
+chown -R my9999:mysql mysql_9999
+5拷贝备份的配置文件
+cp /data/mysql_9999bak/my9999.cnf /data/mysql_9999/
+6启动slave mysql
+cd /usr/local/mysql && ./bin/mysqld_safe --defaults-file=/data/mysql_9999/my9999.cnf &
+7设置change master
+more xtrabackup_binlog_info 
+mysql-bin.000001        668
+CHANGE MASTER TO
+MASTER_HOST='10.248.0.65',
+MASTER_PORT = 9999,
+MASTER_USER='wolf',
+MASTER_PASSWORD='wolf',
+MASTER_LOG_FILE='mysql-bin.000001',
+MASTER_LOG_POS=668;
+8启动slave
+start slave
+9查看slave状态
+show slave status\G

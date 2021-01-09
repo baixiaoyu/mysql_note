@@ -1,0 +1,9 @@
+当网络带宽成为瓶颈的时候，消息压缩能提升30%~40%的吞吐。
+
+压缩发生在group communication engine 层，在数据被交给组通讯线程之前，在用户会话线程内部。事务有效载荷在被发送到组之前可以被压缩，并且在被接收时被解压缩。 压缩是有条件的，取决于配置的阈值。 默认情况下压缩已启用。
+
+STOP GROUP_REPLICATION;
+SET GLOBAL group_replication_compression_threshold= 2097152; --这个参数是个阈值，只有大小超过这个阈值的大小才会被压缩。这个例子中是2MB
+START GROUP_REPLICATION;
+
+禁止压缩就将上面的参数设置为0

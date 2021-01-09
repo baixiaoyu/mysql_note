@@ -1,0 +1,1 @@
+https://www.percona.com/blog/2014/11/04/data-inconsistencies-on-mysql-replicas-beyond-pt-table-checksum/

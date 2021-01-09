@@ -1,0 +1,6 @@
+https://www.percona.com/blog/2015/06/15/speed-up-group-by-queries-with-subselects-in-mysql/
+
+思路是，先在表上进行分组统计然后在去join，而不是跟别的表join在统计，这样join的数量集会下降很多。
+
+
+

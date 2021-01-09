@@ -1,0 +1,4 @@
+在cpu核数非常多的机器上，读提交的级别性能表现会有下降
+https://www.percona.com/blog/2017/01/19/open-source-databases-big-machines-read-committed-scale-144-cores/
+
+

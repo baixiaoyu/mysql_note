@@ -1,0 +1,73 @@
+5.6版本修改，需要重启server
+1关闭master的写入，确保主从是同步的
+2在slave上设置skip-slave-start=1,避免slave启动后自动同步
+3修改配置，开启gtid模式
+在参数中设置
+gtid_mode=on
+enforce_gtid_consistency=on
+log-slave-updates=true
+4重启所有的server，重启后从库重新制定master
+CHANGE MASTER TO MASTER_HOST = '10.200.142.48',MASTER_PORT = 3333,MASTER_USER = 'repl',MASTER_PASSWORD = 'sRTEFlO0931*#9^sf0P09', MASTER_AUTO_POSITION = 1;
+start slave;
+
+在show slave status\G的输出中看到下面的输出
+Retrieved_Gtid_Set: 
+            Executed_Gtid_Set: 
+                Auto_Position: 1
+
+已经是gtid的模式了，在执行一些gtid不支持的语句的情况下，会直接返回提示信息。
+mysql> create table test select * from baixy;
+ERROR 1786 (HY000): CREATE TABLE ... SELECT is forbidden when @@GLOBAL.ENFORCE_GTID_CONSISTENCY = 1.
+
+
+上面的方式适合的情况是，搭建一个新的环境，master中的数据量不大的情况下，也可以使用上面的方式运行，change master语句会在master上获取所有的gtid，然后在slave上执行，也就
+是不需要导出数据，在的导入数据到从库中去。如果binlog的量比较大的情况下就不适合了。
+
+使用mysqldump来生成备份数据文件。需要指定 --master-data参数
+
+/usr/local/mysql-5.6.25/bin/mysqldump -u root -S /tmp/mysql_3333.sock -pAdmin@lmLCiUAT* --default-character-set=utf8  --single-transaction --master-data=2   --all-databases --triggers --routines --events >> out.sql
+
+
+下面的导出文件中没有gtid的信息
+/usr/local/mysql-5.6.25/bin/mysqldump -u root -S /tmp/mysql_3333.sock -pAdmin@lmLCiUAT* --default-character-set=utf8  --single-transaction --master-data=2  --set-gtid-purged=OFF  --all-databases --triggers --routines --events >>output3.sql 
+
+
+或者使用xtrabackup也可以
+方法二、percona Xtrabackup
+
+1、Xtrabackup_binlog_info文件中，包含global.gtid_purged='XXXXXX:XXXX'的信息。
+
+2、然后到slave去手工的 SET GLOBAL.GTID_PURGED='XXXXXX:XXXX'。
+
+3、恢复备份，开启change master to 命令。
+
+
+如果master运行了很久，有很多的binlog，并且之前的binlog可能已经被删除掉了，这个时候需要在slave上通过gtid_purged来跳过那些缺失的事务。
+
+gtid的模式下跳过一个事件，在gtid的模式下，如果主从因为异常导致了中断，那么按照下面的方式及处理：跳过异常事务有丢失数据的风险，要谨慎。
+stop slave;
+set gtid_next='c5fd12db-51a6-11e7-aca0-5254006b6830:10';--此处指定的值，是executed_gtid_set的值的下一个值
+begin;commit;
+set gtid_next='automatic';
+start slave;
+
+
+下面是一个具体的示例：----------------------------------------
+Master_SSL_Crlpath: 
+           Retrieved_Gtid_Set: 00021690-1111-1111-1111-111111111111:1-7
+            Executed_Gtid_Set: 00021690-1111-1111-1111-111111111111:1-5
+                Auto_Position: 1
+1 row in set (0.00 sec)
+
+mysql> stop slave;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> set gtid_next='00021690-1111-1111-1111-111111111111:1-6';
+ERROR 1231 (42000): Variable 'gtid_next' can't be set to the value of '00021690-1111-1111-1111-111111111111:1-6'
+mysql> set gtid_next='00021690-1111-1111-1111-111111111111:6';
+Query OK, 0 rows affected (0.00 sec)
+begin:commit;
+set gtid_next='automatic';
+start slave;
+
+exec_master_position的值也是在变化的。

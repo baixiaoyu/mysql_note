@@ -1,0 +1,67 @@
+表上必须要有主键，否在在执行的时候会提示无法分chunk，导致无法执行
+
+调数的时候，应该用工具先在从库调整，然后在主库上把会话的日志关闭，在主库上执行，这样不会有延时产生。
+
+使用该工具的时候如果有外键，要使用--alter-foreign-keys-method 设置，另外表上有触发器的时候，该工具不可用，这也是不建议使用外检和触发器的一个原因。同时表上必须要有主键或唯一索引才可以使用
+pt-online-schema-change -u root -S /tmp/mysql_3309.sock --alter='add key idx_name(table_name)' --execute D=test,t=baixyu
+
+
+不太清楚为什么会提示cannot connect to的提示
+
+
+ pt-online-schema-change -u root -S /tmp/mysql_3309.sock --alter='add key idx_name(table_name)' --execute D=test,t=baixyu
+Cannot connect to D=test,S=/tmp/mysql_3309.sock,h=xx.13,u=root
+No slaves found.  See --recursion-method if host hz-10-200-142-44.h.xx has slaves.
+Not checking slave lag because no slaves were found and --check-slave-lag was not specified.
+Operation, tries, wait:
+  copy_rows, 10, 0.25
+  create_triggers, 10, 1
+  drop_triggers, 10, 1
+  swap_tables, 10, 1
+  update_foreign_keys, 10, 1
+Altering `test`.`baixyu`...
+Creating new table...
+Created new table test._baixyu_new OK.
+Altering new table...
+Altered `test`.`_baixyu_new` OK.
+2017-03-12T15:36:30 Creating triggers...
+2017-03-12T15:36:30 Created triggers OK.
+2017-03-12T15:36:30 Copying approximately 310 rows...
+2017-03-12T15:36:30 Copied rows OK.
+2017-03-12T15:36:30 Swapping tables...
+2017-03-12T15:36:30 Swapped original and new tables OK.
+2017-03-12T15:36:30 Dropping old table...
+2017-03-12T15:36:30 Dropped old table `test`.`_baixyu_old` OK.
+2017-03-12T15:36:30 Dropping triggers...
+2017-03-12T15:36:30 Dropped triggers OK.
+Successfully altered `test`.`baixyu`.
+
+添加索引
+pt-online-schema-change -u root -h 127.0.0.1 -P 3309 --alter='add key idx_schema(schema_name)' --execute D=test,t=baixyu
+
+修改字段类型
+pt-online-schema-change --alter="modify col_name varchar(256) not null default ''" --user=root --host xx.48 -P 3333 --password=123456 D=test,t=t_bigtable --charset=utf8 --execute 
+
+
+pt-online-schema-change --alter="modify c char(100) not null default ''" --user=root --host xx.48 -P 3333 --password=123456 D=test,t=sbtest --charset=utf8 --execute 
+
+
+修改分区表是没有问题的
+
+pt-online-schema-change --alter="modify account_id varchar(256)" --user=root --host xx.140.69 -P 3406 --password=xx* D=xx_data,t=tb_collect_mobile_ev --charset=utf8 --execute
+
+
+
+删除字段
+./pt-online-schema-change -u root -h 10.250.7.50  -p yang --alter='drop  column vid ' --execute D=houyi,t=ga  
+
+
+添加字段,下面的不删除原表，保留
+pt-online-schema-change --user=root --password=xx* --host=xx.140.69 --port=3406 --charset=utf8 --nodrop-old-table --alter="add column last_fix_return_date DATETIME NULL COMMENT 'xxx' AFTER first_mob_channel" D=xx_data,t=xxxxer_tag --exec
+
+
+pt-online-schema-change --user=root  --host=127.0.0.1 --port=3309 --charset=utf8 --nodrop-old-table --alter="add column last_fix_return_date DATETIME NULL COMMENT 'xxx' AFTER name" D=test,t=t1 --exec
+
+
+删除外键约束
+https://www.percona.com/blog/2017/03/21/dropping-foreign-key-constraint-using-pt-online-schema-change-2/

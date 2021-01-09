@@ -1,0 +1,1 @@
+https://www.percona.com/blog/2016/08/10/small-innodb_page_size-performance-boost-ssd/

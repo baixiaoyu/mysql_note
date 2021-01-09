@@ -1,0 +1,60 @@
+需要设置undo表空间单独保存
+
+sync_relay_log_info：Synchronously flush relay log info to disk after every #th transaction，每隔多少个事务 sync 一次 relay log 信息；
+
+sync_master_info： Synchronously flush master info to disk after every #th event，每隔多少个log_event sync 一次 master log 信息；
+
+sync_relay_log： Synchronously flush relay log to disk after every #th event，每隔多少个 log_event sync 一次 relay log 信息；
+
+mysql 在读取binlog event时，会首先将位点信息写入操作系统的文件，但是没有 sync 操作，所以当OS crash时，会造成之前写但没有 sync 的位点信息丢失。
+
+
+在高并发的情况下应该考虑关闭performance_schema参数，这个参数在高并发下会消耗cpu。
+
+
+innodb_use_native_aio这个参数设置是否使用linux的异步io，只能在linux上设置，默认情况下是启用的。在其他的类linux系统上使用的是同步io，这个功能是提升了io消耗很高的系统的扩展能力，可以通过show engine innodb status的 reads/writes来看到效果。
+
+
+innodb_flush_method这个参数在linux下的有效值有下面的几个:
+	
+fsync
+O_DSYNC
+littlesync
+nosync
+O_DIRECT：InnoDB uses O_DIRECT (or directio() on Solaris) to open the data files, and uses fsync() to flush both the data and log files. This option is available on some GNU/Linux versions, FreeBSD, and Solaris.
+O_DIRECT_NO_FSYNC：nnoDB uses O_DIRECT during flushing I/O, but skips the fsync() system call afterward
+
+
+这个参数控制刷新数据到数据文件和日志文件的方式，如果这个参数的值是null，那在类unix上默认是fsync的。这个值应该是个总开关，影响着sync_binlog， trx_at_commit的参数。
+
+
+
+innodb_change_buffering 这个参数是控制mysql三大特性之一的change buffer，InnoDB是否执行更改缓冲，这种优化将写操作延迟到二级索引，以便可以顺序执行I / O操作。 下表描述了允许的值。什么叫延迟到二级索引？不太明白，默认是缓存所有的类型，在percona的blog中，他们在做rw的性能对比测试的时候将这个值设置成了none，从字面理解上看，这个参数就是优化io的啊，应该启用才对，为什么他们给设置成了none，不启用。不太理解。
+none
+
+inserts
+
+deletes
+
+changes
+
+purges
+
+all
+
+innodb_adaptive_hash_index控制自适应hash索引的，这个参数他们也给禁用了，貌似之前看到过一篇文章说了自适应hash有问题。
+
+
+innodb_flush_log_at_timeout每N秒写入一次并刷新日志。这个值在高并发测试的时候他们也给关闭了。 innodb_flush_log_at_timeout允许增加刷新之间的超时时间以减少刷新并避免影响二进制日志组提交的性能。 innodb_flush_log_at_timeout的默认设置是每秒一次。
+
+
+
+添加super_read_only参数，把super角色的写能力关闭
+
+max_user_connections这个参数设置每个用户的最大连接数，做到资源限制
+
+GRANT USAGE ON *.* TO 'batchjob1'@'localhost' WITH MAX_USER_CONNECTIONS 10;
+
+
+
+

@@ -1,0 +1,9 @@
+在5.7版本之前可以使用show engine innodb mutex 查看mutex信息，但是在之后的版本中只能是通过视图去查看了
+
+SELECT EVENT_NAME, SUM_TIMER_WAIT/1000000000 WAIT_MS, COUNT_STAR FROM performance_schema.events_waits_summary_global_by_event_name
+WHERE SUM_TIMER_WAIT > 0
+AND EVENT_NAME LIKE 'wait/synch/mutex/innodb/%'
+ORDER BY SUM_TIMER_WAIT DESC, COUNT_STAR DESC;
+
+
+https://www.percona.com/blog/2015/01/06/getting-mutex-information-from-mysqls-performance_schema/

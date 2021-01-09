@@ -1,0 +1,2 @@
+mysql -e 'show processlist\G' |grep State:|sort|uniq -c|sort -rn
+

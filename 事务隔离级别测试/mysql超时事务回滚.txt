@@ -1,0 +1,2 @@
+oracle在超时后，整个事务是回滚的，mysql事务中之前的操作是不会滚的，可以通过参数innodb_rollback_on_timeout来设置，超时后，整个事务回滚。
+

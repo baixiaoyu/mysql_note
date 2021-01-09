@@ -1,0 +1,5 @@
+https://yq.aliyun.com/articles/41050
+purge 锁的问题http://www.a-site.cn/article/265477.html
+
+mysql undo的回滚链的实现方式http://blog.csdn.net/zhaiwx1987/article/details/7211220
+

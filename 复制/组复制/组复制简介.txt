@@ -1,0 +1,196 @@
+
+组复制提供了了容错能力，只要组中的大多数的成员存活，那么系统就是可用的，组复制有2中形式，多master，所有server都能接受更新和单master自动选主，只有master接受更新,有更新冲突的时候，会采用先提交获胜的策略，回滚掉后提交的，组复制中对于读写的事务的提交并不是有原始的server单独决定的，需要所有的server决定是否提交，在原始server上提交的时候，该server会发送一个广播，包含行改变及行的唯一标识符，然后这个事务有个全局总顺序，确保每个server上接收的是相同顺序的事务，在多master模式中，应用端需要处理一些该模式下的异常
+
+对于一个提交的事务，组中的大部分要确保事务全局序列的顺序性，每个节点单独的决定是提交还是丢弃，然后所有的server确定最终的决定，如果有网络分区发生，导致部分的server没办法访问，发生分区，那么系统将会停止处理直到问题解决。所以组复制中有内建的，自动的脑力检测机制。
+
+组复制跟普通的复制一样，也是shared-nothing的结构
+
+在不同的server上并发的执行事务可能会遇到冲突，这种冲突会在certification的过程中被检测，如果并发的事务，在不同的server上执行，更新了相同的行，就会产生冲突，这种冲突的处理就是先执行的正常，后执行的被回滚。
+
+
+组复制中的失败检测
+
+内部有机制来发现及报告哪个server是静默的并假定是死亡的，失败检测器提供可能失败sevrver的信息，如果组都同意这个server可能是死亡的，那么就认定他是死亡的server，并排除。当server没有回应的时候，就开始检测过程，但一个server与组中其他成员孤立的时候，这个server会怀疑别的server都失败了，有超时设置，但他不能与组中大多数达成一致，他的怀疑就是无效的，所以他是不能执行任何的本地事务的。
+
+组成员
+
+server不但要同意事务提交，还要维护当前视图，如果server将一个新的server认为是组的一部分，那么组会自动重新配置，同样的，，一个server离开后，组信息也会重新配置。如果因为异常原因，server在离开组后，如果组没有达成一致，那么为了防止脑裂的发生，系统会被block，需要管理员去手工处理修复。
+
+组复制中如果一个server宕掉了，那么客户端的连接需要使用负载均衡或是路由去重新连接别的server。组复制是不会去解决这种问题的。
+
+组复制有2中模式，单主和多主模式，默认的情况下是单主的。单主的情况下，第一个启动的实例就是主，其他的节点启动后都是只读的模式。
+在单主的模式下，当主宕掉后，剩下的成员会通过uuid来进行选择新主，选择列表中的第一个成员，
+客户端的配置需要注意，需要在新主应用完他的rely log后才连接新主进行操作。
+
+
+查看集群的server的状态
+
+ SELECT * FROM performance_schema.replication_group_members;
+
+在集群的额大部分不可用的情况下，集群是停止服务的
+
+
+部署单主模式，需要注意组复制的自增主键的offset使用了serverid,所以serverid不能设置的过大。
+1部署3个mysql实例
+2在配置文件中配置参数
+server_id=1
+gtid_mode=ON
+enforce_gtid_consistency=ON
+master_info_repository=TABLE
+relay_log_info_repository=TABLE
+binlog_checksum=NONE
+log_slave_updates=ON
+log_bin=binlog
+binlog_format=ROW
+
+transaction_write_set_extraction=XXHASH64
+loose-group_replication_group_name="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+loose-group_replication_start_on_boot=off
+loose-group_replication_local_address= "127.0.0.1:24901"
+loose-group_replication_group_seeds= "127.0.0.1:24901,127.0.0.1:24902,127.0.0.1:24903"
+loose-group_replication_bootstrap_group= off
+
+
+3在mysql中创建复制用户
+mysql> SET SQL_LOG_BIN=0;
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> CREATE USER rpl_user@'%' IDENTIFIED BY 'rpl_pass';
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> GRANT REPLICATION SLAVE ON *.* TO rpl_user@'%';
+Query OK, 0 rows affected, 1 warning (0,00 sec)
+
+mysql> FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> SET SQL_LOG_BIN=1;
+Query OK, 0 rows affected (0,00 sec)
+
+为用户配置复制恢复的通道
+CHANGE MASTER TO MASTER_USER='rpl_user', MASTER_PASSWORD='rpl_pass' \\
+		      FOR CHANNEL 'group_replication_recovery';
+
+每个实例的机器需要正确的配置hostname，否则会导致通讯出错。在每个节点添加到集群的过程中，都使用了分布式的恢复来进行与其他成员的同步。
+
+安装插件
+INSTALL PLUGIN group_replication SONAME 'group_replication.so';
+使用命令查看插件是否安装成功
+mysql> SHOW PLUGINS;
+
+
+在节点1上启动组复制
+SET GLOBAL group_replication_bootstrap_group=ON;
+START GROUP_REPLICATION;
+SET GLOBAL group_replication_bootstrap_group=OFF;
+
+
+查看组成员
+SELECT * FROM performance_schema.replication_group_members;
+
+创建个测试表，插入几条数据，然后看下事件
+SHOW BINLOG EVENTS;
+
+
+接下来添加实例到组中，创建实例2的配置文件
+# Replication configuration parameters
+#
+server_id=2
+gtid_mode=ON
+enforce_gtid_consistency=ON
+master_info_repository=TABLE
+relay_log_info_repository=TABLE
+binlog_checksum=NONE
+log_slave_updates=ON
+log_bin=binlog
+binlog_format=ROW
+
+#
+# Group Replication configuration
+#
+transaction_write_set_extraction=XXHASH64
+loose-group_replication_group_name="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+loose-group_replication_start_on_boot=off
+loose-group_replication_local_address= "127.0.0.1:24902"
+loose-group_replication_group_seeds= "127.0.0.1:24901,127.0.0.1:24902,127.0.0.1:24903"
+loose-group_replication_bootstrap_group= off
+
+
+
+在节点2上创建用户
+SET SQL_LOG_BIN=0;
+CREATE USER rpl_user@'%';
+GRANT REPLICATION SLAVE ON *.* TO rpl_user@'%' IDENTIFIED BY 'rpl_pass';
+SET SQL_LOG_BIN=1;
+CHANGE MASTER TO MASTER_USER='rpl_user', MASTER_PASSWORD='rpl_pass' \\
+	FOR CHANNEL 'group_replication_recovery';
+
+
+安装插件
+INSTALL PLUGIN group_replication SONAME 'group_replication.so';
+启动2上的组复制
+mysql> START GROUP_REPLICATION;
+
+检查成员
+ SELECT * FROM performance_schema.replication_group_members;
+
+这个时候节点2是会自动的追赶上节点1的。
+
+按照添加节点2的过程添加节点3
+
+监控组复制
+
+performance_schema.replication_group_member_stats
+
+performance_schema.replication_group_members
+
+These Perfomance Schema replication tables also show information about Group Replication:
+
+performance_schema.replication_connection_status
+
+performance_schema.replication_applier_status
+
+The replication channels created by the Group Replication plugin are named:
+
+
+在单主模式下，查找新主是谁
+SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME= 'group_replication_primary_member';
+
+
+如果节点中大部分的实例意外宕掉，则集群无法确定当前的集群由哪些节点组成，会发生脑裂的情况，这种情况下需要管理员介入处理。
+
+手工调整集群中的成员
+查看节点1的地址
+SELECT @@group_replication_local_address;
+查看节点2的地址
+ SELECT @@group_replication_local_address;
+使用下面的命令强制调整集群中的成员
+SET GLOBAL group_replication_force_members="127.0.0.1:10000,127.0.0.1:10001";
+
+需要确保排除去的节点是shutdown的状态，否则他们组成一个集群，就出现了脑裂的风险。
+
+
+
+
+
+
+组复制的限制：
+1不能使用复制event checksums
+2认证过程不会考虑gap锁，推荐使用read committed隔离级别。
+3认证过程不会考虑表锁及命名锁
+4不支持savepoints
+5可序列化隔离级别不会被支持
+6在使用多master的结构中，在不同server上对相同的对象上同时进行ddl和dml操作是不被支持的。
+7多master的情况下不支持外键
+8大事务，对于那些很大的事务，如果在5秒的窗口内不能在组成员内拷贝，那么会导致组通讯失败，要避免这个需要使事务尽可能的小。
+多主模式不支持级联的外键
+
+最多有9个server
+需要使用group_replication_ip_whitelist参数指定能访问的ip
+需要网络条件好，如果网络有延时，那么集群成员会频繁的被剔除
+
+
+
+主节点和从节点的数据可以不一样，这个就跟普通的复制是一样的，只要不产生不存在的错误，都能正常复制
+
+整体感觉跟galera cluster很像

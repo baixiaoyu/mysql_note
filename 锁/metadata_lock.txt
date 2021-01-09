@@ -1,0 +1,35 @@
+5.6
+ select thread_id, processlist_id, processlist_state,processlist_info from performance_schema.threads where PROCESSLIST_STATE like ’%metadata%’\G;
+
+
+5.7
+select processlist_id, object_type, lock_type, lock_status, source, processlist_info from metadata_locks join threads on (owner_thread_id = thread_id) where object_schema=’employees’ and object_name=’titles’ and lock_status=’pending’\G;
+
+哪个线程在持有dml锁
+
+
+
+ select processlist_id pid, object_type, lock_type, lock_status, source from metadata_locks join threads on (owner_thread_id = thread_id) where object_schema=’employees’ and object_name=’titles’;
+
+
+查看哪个线程在等待表锁
+
+
+
+select thread_id, processlist_id, processlist_state, processlist_info from performance_schema.threads where PROCESSLIST_STATE like ’%table level lock%’\G
+
+
+ select OBJECT_SCHEMA, OBJECT_NAME, OWNER_THREAD_ID oid， INTERNAL_LOCK, EXTERNAL_LOCK from table_handles;
+
+哪个线程在持有表锁
+
+ select * from table_handles\G
+
+
+行锁
+select * from information_schema.innodb_lock_waits\G;
+
+等待线程
+
+select * from information_schema.innodb_locks\G
+

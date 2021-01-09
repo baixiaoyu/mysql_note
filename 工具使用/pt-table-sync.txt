@@ -1,0 +1,7 @@
+在检测到数据不一致的情况下，可以使用这个命令进行数据不一致的修复
+需要表上有唯一约束，否则会报错,下面的语句只是打印输出，不会真正的去执行，h参数指定的从库的地址
+pt-table-sync --sync-to-master --replicate=percona.checksums  h=xx.231,u=root,p=xx,P=3408--databases=test --tables=baixyu --print 
+
+
+pt-table-sync --sync-to-master --replicate=percona.checksums  h=xx.230,u=root,p=xx,P=3408--databases=test --tables=baixyu --print 
+DELETE FROM `test`.`baixyu` WHERE `id`='2' LIMIT 1 /*percona-toolkit src_db:test src_tbl:baixyu src_dsn:P=3408,h=xx.231,p=...,u=root dst_db:test dst_tbl:baixyu dst_dsn:P=3408--databases=test,h=xx.230,p=...,u=root lock:1 transaction:1 changing_src:percona.checksums replicate:percona.checksums bidirectional:0 pid:2157 user:root host:biee*/

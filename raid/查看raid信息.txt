@@ -1,0 +1,96 @@
+查看raid级别
+/opt/MegaRAID/MegaCli/MegaCli64 -LDInfo -Lall -aALL
+
+查看raid卡信息
+/opt/MegaRAID/MegaCli/MegaCli64 -AdpAllInfo -aALL
+
+查看硬盘信息
+/opt/MegaRAID/MegaCli/MegaCli64 -PDList -aALL
+
+显示磁盘的访问方式和缓存策略
+/opt/MegaRAID/MegaCli/MegaCli64 -LDGetProp -Cache -LALL -aALL
+
+http://blog.chinaunix.net/uid-25135004-id-3139293.html
+
+命令使用：
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDInfo -Lall -aALL 查raid级别
+#/opt/MegaRAID/MegaCli/MegaCli64 -AdpAllInfo -aALL 查raid卡信息
+#/opt/MegaRAID/MegaCli/MegaCli64 -PDList -aALL 查看硬盘信息
+#/opt/MegaRAID/MegaCli/MegaCli64 -AdpBbuCmd -aAll 查看电池信息
+#/opt/MegaRAID/MegaCli/MegaCli64 -FwTermLog -Dsply -aALL 查看raid卡日志
+#/opt/MegaRAID/MegaCli/MegaCli64 -adpCount 【显示适配器个数】
+#/opt/MegaRAID/MegaCli/MegaCli64 -AdpGetTime –aALL 【显示适配器时间】
+#/opt/MegaRAID/MegaCli/MegaCli64 -AdpAllInfo -aAll 【显示所有适配器信息】
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDInfo -LALL -aAll 【显示所有逻辑磁盘组信息】
+#/opt/MegaRAID/MegaCli/MegaCli64 -PDList -aAll 【显示所有的物理信息】
+#/opt/MegaRAID/MegaCli/MegaCli64 -AdpBbuCmd -GetBbuStatus -aALL |grep ‘Charger Status’ 【查看充电状态】
+#/opt/MegaRAID/MegaCli/MegaCli64 -AdpBbuCmd -GetBbuStatus -aALL【显示BBU状态信息】
+#/opt/MegaRAID/MegaCli/MegaCli64 -AdpBbuCmd -GetBbuCapacityInfo -aALL【显示BBU容量信息】
+#/opt/MegaRAID/MegaCli/MegaCli64 -AdpBbuCmd -GetBbuDesignInfo -aALL 【显示BBU设计参数】
+#/opt/MegaRAID/MegaCli/MegaCli64 -AdpBbuCmd -GetBbuProperties -aALL 【显示当前BBU属性】
+#/opt/MegaRAID/MegaCli/MegaCli64 -cfgdsply -aALL 【显示Raid卡型号，Raid设置，Disk相关信息】
+3.磁带状态的变化，从拔盘，到插盘的过程中。
+Device |Normal|Damage|Rebuild|Normal
+Virtual Drive |Optimal|Degraded|Degraded|Optimal
+Physical Drive |Online|Failed –> Unconfigured|Rebuild|Online
+4.查看磁盘缓存策略
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDGetProp -Cache -L0 -a0
+or
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDGetProp -Cache -L1 -a0
+or
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDGetProp -Cache -LALL -a0
+ro
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDGetProp -Cache -LALL -aALL
+ro
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDGetProp -DskCache -LALL -aALL
+5.设置磁盘缓存策略
+缓存策略解释：
+
+WT (Write through
+WB (Write back)
+NORA (No read ahead)
+RA (Read ahead)
+ADRA (Adaptive read ahead)
+Cached
+Direct
+例子：
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDSetProp WT|WB|NORA|RA|ADRA -L0 -a0
+or
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDSetProp -Cached|-Direct -L0 -a0
+or
+enable / disable disk cache
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDSetProp -EnDskCache|-DisDskCache -L0 -a0
+6.创建一个 raid5 阵列，由物理盘 2,3,4 构成，该阵列的热备盘是物理盘 5
+#/opt/MegaRAID/MegaCli/MegaCli64 -CfgLdAdd -r5 [1:2,1:3,1:4] WB Direct -Hsp[1:5] -a0
+7.创建阵列，不指定热备
+#/opt/MegaRAID/MegaCli/MegaCli64 -CfgLdAdd -r5 [1:2,1:3,1:4] WB Direct -a0
+8.删除阵列
+#/opt/MegaRAID/MegaCli/MegaCli64 -CfgLdDel -L1 -a0
+9.在线添加磁盘
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDRecon -Start -r5 -Add -PhysDrv[1:4] -L1 -a0
+10.阵列创建完后，会有一个初始化同步块的过程，可以看看其进度。
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDInit -ShowProg -LALL -aALL
+或者以动态可视化文字界面显示
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDInit -ProgDsply -LALL -aALL
+11.查看阵列后台初始化进度
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDBI -ShowProg -LALL -aALL
+或者以动态可视化文字界面显示
+#/opt/MegaRAID/MegaCli/MegaCli64 -LDBI -ProgDsply -LALL -aALL
+12.指定第 5 块盘作为全局热备
+#/opt/MegaRAID/MegaCli/MegaCli64 -PDHSP -Set [-EnclAffinity] [-nonRevertible] -PhysDrv[1:5] -a0
+13.指定为某个阵列的专用热备
+#/opt/MegaRAID/MegaCli/MegaCli64 -PDHSP -Set [-Dedicated [-Array1]] [-EnclAffinity] [-nonRevertible] -PhysDrv[1:5] -a0
+14.删除全局热备
+#/opt/MegaRAID/MegaCli/MegaCli64 -PDHSP -Rmv -PhysDrv[1:5] -a0
+15.将某块物理盘下线/上线
+#/opt/MegaRAID/MegaCli/MegaCli64 -PDOffline -PhysDrv [1:4] -a0
+#/opt/MegaRAID/MegaCli/MegaCli64 -PDOnline -PhysDrv [1:4] -a0
+16.查看物理磁盘重建进度
+#/opt/MegaRAID/MegaCli/MegaCli64 -PDRbld -ShowProg -PhysDrv [1:5] -a0
+或者以动态可视化文字界面显示
+#/opt/MegaRAID/MegaCli/MegaCli64 -PDRbld -ProgDsply -PhysDrv [1:5] -a0
+
+磁带状态的变化，从拔盘，到插盘的过程中：
+Device |Normal|Damage|Rebuild|Normal
+Virtual Drive |Optimal|Degraded|Degraded|Optimal
+Physical Drive |Online|Failed –> Unconfigured|Rebuild|Online

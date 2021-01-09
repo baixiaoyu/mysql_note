@@ -1,0 +1,11 @@
+应该禁用读缓存，让缓存全部配置成写缓存，但是需要bbu的保障。不带bbu的写缓存会导致数据丢失。也就是writeback功能
+
+测试磁盘的脚本
+http://brad.livejournal.com/2116715.html
+
+writeback功能是指raid控制器能将写入的数据放入自身的缓存中，并后面再写入磁盘。没有启用writeback的就是writethrongh，即使配置了writeback，但实际也是用了writethrong，可能是没有电池备份单元，writeback需要在有电池备份单元的配置下才能正常工作。
+
+为了保证电池有效性，raid卡会定时检查电池的电量，并在电量不足的时候充电，充电的这个时候，就切换到了writethrongh模式，这个情况下的性能就很低了，所以需要监控电池的电量
+
+在writeback调整成writethrough的时候是立即生效，但是反过来设置需要重启服务器
+

@@ -1,0 +1,3 @@
+查询缓存的问题很多，基本上是可以被禁用了的。
+
+https://www.percona.com/blog/2016/11/11/is-your-query-cache-really-disabled/

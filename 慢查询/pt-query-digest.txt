@@ -1,0 +1,43 @@
+(1)直接分析慢查询文件:
+pt-query-digest  slow.log > slow_report.log
+
+(2)分析最近12小时内的查询：
+pt-query-digest  --since=12h  slow.log > slow_report2.log
+
+(3)分析指定时间范围内的查询：
+pt-query-digest slow.log --since '2014-04-17 09:30:00' --until '2014-04-17 10:00:00'> > slow_report3.log
+
+(4)分析指含有select语句的慢查询
+pt-query-digest--filter '$event->{fingerprint} =~ m/^select/i' slow.log> slow_report4.log
+
+(5) 针对某个用户的慢查询
+pt-query-digest--filter '($event->{user} || "") =~ m/^root/i' slow.log> slow_report5.log
+
+(6) 查询所有所有的全表扫描或full join的慢查询
+pt-query-digest--filter '(($event->{Full_scan} || "") eq "yes") ||(($event->{Full_join} || "") eq "yes")' slow.log> slow_report6.log
+
+(7)把查询保存到query_review表
+pt-query-digest  --user=root –password=abc123 --review  h=localhost,D=test,t=query_review--create-review-table  slow.log
+
+(8)把查询保存到query_history表
+pt-query-digest  --user=root –password=abc123 --review  h=localhost,D=test,t=query_ history--create-review-table  slow.log_20140401
+pt-query-digest  --user=root –password=abc123--review  h=localhost,D=test,t=query_history--create-review-table  slow.log_20140402
+
+(9)通过tcpdump抓取mysql的tcp协议数据，然后再分析
+tcpdump -s 65535 -x -nn -q -tttt -i any -c 1000 port 3306 > mysql.tcp.txt
+pt-query-digest --type tcpdump mysql.tcp.txt> slow_report9.log
+
+(10)分析binlog
+mysqlbinlog mysql-bin.000093 > mysql-bin000093.sql
+pt-query-digest  --type=binlog  mysql-bin000093.sql > slow_report10.log
+
+(11)分析general log
+pt-query-digest  --type=genlog  localhost.log > slow_report11.log
+ 
+官方文档：http://www.percona.com/doc/percona-toolkit/2.2/pt-query-digest.html
+
+
+update unionpay_user_token set token_end=now() where user_id=5062959; update unionpay_user_token set token_end=now() where user_id=5062959; update unionpay_user_token set token_end=now() where user_id=5062959; 
+update unionpay_user_token set token_end=now() where user_id=5062959; 
+
+update unionpay_user_token set token_end=now() where user_id=5062959; update unionpay_user_token set token_end=now() where user_id=5062959; 

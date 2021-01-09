@@ -1,0 +1,4 @@
+innodb_buffer_pool_read_request/(innodb_buffer_pool_read_requests+innodb_buffer_pool_read_ahead+innodb_buffer_pool_reads)
+
+mysql减少全表扫对缓存数据的影响
+https://blog.csdn.net/aoerqileng/article/details/100039855

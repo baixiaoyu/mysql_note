@@ -1,0 +1,41 @@
+oracle建议关闭
+https://blogs.oracle.com/linux/performance-issues-with-transparent-huge-pages-thp
+
+ cat /sys/kernel/mm/redhat_transparent_hugepage/defrag
+[always] madvise never
+1
+2
+如果是启用状态，修改/etc/rc.local文件并添加以下两行， 
+echo never > /sys/kernel/mm/redhat_transparent_hugepage/defrag 
+echo never > /sys/kernel/mm/redhat_transparent_hugepage/enabled 
+
+
+检查是否关闭
+
+# grep AnonHugePages /proc/meminfo
+
+If the output contains a line like "AnonHugepages: 
+xxxx kB", with a value > 0kB, the kernel is using Transparent HugePages.
+
+方法二：
+
+1、编辑 /etc/rc.local 添加如下内存
+
+[root]# cat /etc/rc.local
+if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+echo never > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+echo never > /sys/kernel/mm/transparent_hugepage/defrag
+fi
+
+2、 重启服务器
+
+3、检查是否关闭
+
+# grep AnonHugePages /proc/meminfo
+
+If the output contains a line like "AnonHugepages: 
+xxxx kB", with a value > 0kB, the kernel is using Transparent HugePages.
+
+

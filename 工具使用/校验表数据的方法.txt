@@ -1,0 +1,97 @@
+要校验主从表是否一致，可以用下面的方法；
+
+2mysqldiff
+3pt-table-checksum
+
+
+从库使用dsn的方式去连接
+
+create database percona_schema;
+CREATE TABLE percona_schema.dsns ( `id` int(11) NOT NULL AUTO_INCREMENT, `parent_id` int(11) DEFAULT NULL, `dsn` varchar(255) NOT NULL, PRIMARY KEY (`id`) );
+
+将从库的信息写入dsn表中
+INSERT INTO percona_schema.dsns(dsn) VALUES ("h=xxx.xx,P=3333,u=checksums,p=123456");
+
+创建检查用户
+
+GRANT SELECT, PROCESS, SUPER, REPLICATION SLAVE ON *.* TO 'checksums'@'xxx.141.21' IDENTIFIED BY '123456';
+
+
+检查mysql库，排除mysql.user表
+pt-table-checksum h='xx9',u='checksums',p='xxxx',P=3306 -d mysql --ignore-tables=mysql.user --nocheck-replication-filters --replicate=test.checksums  --no-check-binlog-format --recursion-method dsn=t=percona_schema.dsns,h=xxx.141.25,P=3333,u=checksums,p=123456
+
+
+检查mysql库中的t1表
+pt-table-checksum h='xxx.142.43',u='checksums',p='123456',P=3333 -d test --tables=baixyu2  --replicate=test.checksums --no-check-binlog-format --recursion-method dsn=t=percona_schema.dsns,h=xxx.141.25,P=3333,u=checksums,p=123456
+
+
+检查哪些表没有同步,下面的查询只能在从库上查询，虽然主库上有相关的表信息及对应的记录，但是不准确，比如一开始没有diff，但是后来有了diff，主库上是没有显示的。
+
+select * from test.checksums where master_cnt <> this_cnt OR master_crc <> this_crc OR ISNULL(master_crc) <> ISNULL(this_crc)
+
+
+-------------------------------------------------------说明-------------------------------------------
+参数信息
+--nocheck-replication-filters ：不检查复制过滤器，建议启用。后面可以用--databases来指定需要检查的数据库。
+--no-check-binlog-format      : 不检查复制的binlog模式，要是binlog模式是ROW，则会报错。这个选项对于 ROW 模式的复制很重要，因为pt-table-checksum会在 Master和Slave 上设置binlog_format=STATEMENT（确保从库也会执行 checksum SQL）
+--replicate-check-only :只显示不同步的信息。
+--replicate=   ：把checksum的信息写入到指定表中，建议直接写到被检查的数据库当中。 
+--databases=   ：指定需要被检查的数据库，多个则用逗号隔开。
+--tables=      ：指定需要被检查的表，多个用逗号隔开
+h=127.0.0.1    ：Master的地址
+u=root         ：用户名
+p=123456       ：密码
+P=3306         ：端口
+
+
+
+其原理是在主库执行基于statement的sql语句来生成主库数据块的checksum，把相同的sql语句传递到从库执行，并在从库上计算相同数据块的checksum，最后，比较主从库上相同数据块的checksum值，由此判断主从数据是否一致。检测过程根据唯一索引将表按row切分为块（chunk），以为单位计算，可以避免锁表。检测时会自动判断复制延迟、 master的负载， 超过阀值后会自动将检测暂停，减小对线上服务的影响
+
+
+工作过程
+1\. 连接到主库：pt工具连接到主库，然后自动发现主库的所有从库。默认采用show full processlist来查找从库，但是这只有在主从实例端口相同的情况下才有效。
+3\. 查找主库或者从库是否有复制过滤规则：这是为了安全而默认检查的选项。你可以关闭这个检查，但是这可能导致checksum的sql语句要么不会同步到从库，要么到了从库发现从库没有要被checksum的表，这都会导致从库同步卡库。
+5\. 开始获取表，一个个的计算。
+6\. 如果是表的第一个chunk，那么chunk-size一般为1000；如果不是表的第一个chunk，那么采用19步中分析出的结果。
+7\. 检查表结构，进行数据类型转换等，生成checksum的sql语句。
+8\. 根据表上的索引和数据的分布，选择最合适的split表的方法。
+9\. 开始checksum表。
+10\. 默认在chunk一个表之前，先删除上次这个表相关的计算结果。除非–resume。
+14\. 根据explain的结果，判断chunk的size是否超过了你定义的chunk-size的上限。如果超过了，为了不影响线上性能，这个chunk将被忽略。
+15\. 把要checksum的行加上for update锁，并计算。
+17-18\. 把计算结果存储到master_crc master_count列中。
+19\. 调整下一个chunk的大小。
+20\. 等待从库追上主库。如果没有延迟备份的从库在运行，最好检查所有的从库，如果发现延迟最大的从库延迟超过max-lag秒，pt工具在这里将暂停。
+21\. 如果发现主库的max-load超过某个阈值，pt工具在这里将暂停。
+22\. 继续下一个chunk，直到这个table被chunk完毕。
+23-24\. 等待从库执行完checksum，便于生成汇总的统计结果。每个表汇总并统计一次。
+25-26\. 循环每个表，直到结束。
+-----------------------------------------------end --------------------------------------------------
+
+在上面检查是否同步的基础上，如果出现了主从表不一致的情况，那么需要使用pt-table-sync工具来同步数据
+
+高效的同步MySQL表之间的数据，他可以做单向和双向同步的表数据。他可以同步单个表，也可以同步整个库。它不同步表结构、索引、或任何其他模式对象。所以在修复一致性之前需要保证他们表存在
+
+
+下面的语句是只显示要执行的语句，如果要执行，换成--execute
+pt-table-sync --replicate=test.checksums  --databases=test --tables=baixyu2 --sync-to-master h=xxx.141.25,u=checksums,p=123456,P=3333 --print
+
+REPLACE INTO `test`.`baixyu2`(`table_schema`, `table_name`, `id`) VALUES ('aa', 'bb', '312') /*percona-toolkit src_db:test src_tbl:baixyu2 src_dsn:P=3333,h=xxx.142.43,p=...,u=checksums dst_db:test dst_tbl:baixyu2 dst_dsn:P=3333,h=xxx.141.25,p=...,u=checksums lock:1 transaction:1 changing_src:test.checksums replicate:test.checksums bidirectional:0 pid:2549 user:root host:biee*/;
+
+如果从库上的数据多，那么上面的同步会把从库上多余的数据删除来保持主从数据的一致性。
+
+
+参数的定义
+
+--replicate=  ：指定通过pt-table-checksum得到的表，这2个工具差不多都会一直用。
+--databases=  : 指定执行同步的数据库，多个用逗号隔开。
+--tables=     ：指定执行同步的表，多个用逗号隔开。
+--sync-to-master ：指定一个DSN，即从的IP，他会通过show processlist或show slave status 去自动的找主。
+h=127.0.0.1   ：服务器地址，命令里有2个ip，第一次出现的是Master的地址，第2次是Slave的地址。
+u=root        ：帐号。
+p=123456      ：密码。
+--print       ：打印，但不执行命令。
+--execute     ：执行命令。
+
+
+

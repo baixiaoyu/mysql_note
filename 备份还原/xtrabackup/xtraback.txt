@@ -1,0 +1,100 @@
+﻿添加用户
+ CREATE USER 'bkpuser'@'localhost' IDENTIFIED BY 's3cret';
+ GRANT RELOAD, LOCK TABLES,CREATE TABLESPACE,PROCESS, SUPER,CREATE,INSERT,SELECT,REPLICATION CLIENT ON *.* TO 'bkpuser'@'localhost' identified by 's3cret';
+ FLUSH PRIVILEGES;
+创建完全备份
+innobackupex --defaults-file=/data/mysql_3400/my3400.cnf --host=localhost --port=3400 --user=bkpuser --password=s3cret /data/dbatemp/baixiaoyu/backup/ 
+创建完备份后会在最后输出 completed OK!
+创建打包备份 ，并且备份的文件放到/data/dbatemp/baixiaoyu/backup 目录下
+innobackupex --defaults-file=/data/mysql_3400/my3400.cnf --host=localhost --port=3400 --user=bkpuser --password=s3cret --stream=tar /data/dbatemp/baixiaoyu/backup > /data/dbatemp/baixiaoyu/backup/dbbackup20160524.tar
+压缩
+innobackupex --defaults-file=/data/mysql_3400/my3400.cnf --host=localhost --port=3400 --user=bkpuser --password=s3cret --stream=tar /data/dbatemp/baixiaoyu/backup | gzip /data/dbatemp/baixiaoyu/backup/dbbackup.tar.gz  
+
+
+一般情况下，在备份完成后，数据尚且不能用于恢复操作，因为备份的数据中可能会包含尚未提交的事务或已经提交但尚未同步至数据文件中的事务。因此，此时数据文件仍处理不一致状态。“准备”的主要作用正是通过回滚未提交的事务及同步已经提交的事务至数据文件也使得数据文件处于一致性状态。
+
+
+innobakupex命令的--apply-log选项可用于实现上述功能。如下面的命令
+使数据处于一致性的状态，事务被应用，目录要指定到具体的备份目录下,此步不含回滚动作
+ innobackupex --defaults-file=/data/mysql_3400/my3400.cnf --host=localhost --port=3400 --user=bkpuser --password=s3cret --apply-log /data/dbatemp/baixiaoyu/backup/2016-05-24_16-49-14/
+
+ 恢复，注意此处需要使用以前的cnf文件，否则文件都恢复到默认的地址去了
+innobackupex命令的--copy-back选项用于执行恢复操作，其通过复制所有数据相关的文件至mysql服务器DATADIR目录中来执行恢复过程。innobackupex通过backup-my.cnf来获取DATADIR目录的相关信息
+
+innobackupex --defaults-file=/data/mysql_3400bak/my3400.cnf  --copy-back /data/dbatemp/baixiaoyu/backup/2016-05-24_16-49-14/
+修改属主
+chown -R my3400:mysql mysql_3400
+在restore后cnf文件是不会拷贝回去的，需要手工拷贝到/data/mysql_xxxx下
+
+增量备份
+在完全备份的基础上，创建增量备份
+innobackupex --defaults-file=/data/mysql_3400/my3400.cnf --host=localhost --port=3400 --user=bkpuser --password=s3cret --incremental /data/dbatemp/baixiaoyu/backup/ --incremental-basedir=/data/dbatemp/baixiaoyu/backup/2016-05-24_16-49-14
+
+在新生成的目录中查看，看到lsn的位置是连续上了，在创建第二个增量备份的时候，需要指定上一个增量备份的位置，还可以在命令中指定lsn的位置--incremental-lsn=1291135
+[root@vm_mysql_195101 2016-05-24_17-45-47]# more xtrabackup_checkpoints 
+backup_type = incremental
+from_lsn = 1447991182
+to_lsn = 1447992967
+last_lsn = 1447992967
+compact = 0
+recover_binlog_info = 0
+[root@vm_mysql_195101 2016-05-24_17-45-47]# more /data/dbatemp/baixiaoyu/backup/2016-05-24_16-49-14/xtrabackup_checkpoints 
+backup_type = full-prepared
+from_lsn = 0
+to_lsn = 1447991182
+last_lsn = 1447991182
+compact = 0
+recover_binlog_info = 0
+
+
+增量备份的恢复，过程就是将增量备份全部应用在全备份上，然后再应用全部备份,在应用增量之前最好先备份下备份的文件，这样出问题后，可以回退下
+1只应用提交的事务
+innobackupex --apply-log --redo-only --apply-log /data/dbatemp/baixiaoyu/backup/2016-05-24_16-49-14/
+
+2应用增量
+innobackupex --apply-log --redo-only /data/dbatemp/baixiaoyu/backup/2016-05-24_16-49-14/ --incremental-dir=/data/dbatemp/baixiaoyu/backup/2016-05-24_17-45-47
+3
+innobackupex --apply-log /data/dbatemp/baixiaoyu/backup/2016-05-24_16-49-14/
+
+恢复
+
+innobackupex --defaults-file=/data/mysql_3400bak/my3400.cnf  --copy-back /data/dbatemp/baixiaoyu/backup/2016-05-24_16-49-14/
+
+恢复单独的表
+该功能只对单独表空间方式有效
+
+1创建完整备份
+innobackupex --defaults-file=/data/mysql_3400/my3400.cnf --host=localhost --port=3400 --user=bkpuser --password=s3cret /data/dbatemp/baixiaoyu/backup/ 
+2 export
+innobackupex --apply-log --export /data/dbatemp/baixiaoyu/backup/2016-05-25_14-10-03
+3在目标库上创建相应表的结构
+4ALTER TABLE mydatabase.mytable DISCARD TABLESPACE;
+5拷贝exp，ibd,cfg3个文件到对应目录下
+6 ALTER TABLE mydatabase.mytable IMPORT TABLESPACE;	
+
+
+
+基于时间点的恢复
+1创建完整备份
+2应用redo日志
+3查看二进制日志信息 show binary logs
+4查看当前日志信息show master status
+5在备份文件中查看备份的时间点
+more xtrabackup_binlog_pos_innodb 
+mysql-bin.000015        147463598
+6恢复备份文件
+7开始应用二进制日志文件，此处的二进制日志文件也最好是在别的目录，免得恢复完后，日志文件被冲掉，出错后无法再次使用
+mysqlbinlog /path/to/datadir/mysql-bin.000003 /path/to/datadir/mysql-bin.000004 \
+    --start-position=57 > mybinlog.sql
+8 如果决定终止时间，可以使用
+mysqlbinlog /path/to/datadir/mysql-bin.000003 /path/to/datadir/mysql-bin.000004 \
+    --start-position=57 --stop-datetime="11-12-25 01:00:00" | mysql -u root -p
+	
+	
+	
+长时间运行的查询会阻塞备份的执行，可以用下面的选项杀掉长时间的查询
+$ innobackupex --lock-wait-threshold=40 --lock-wait-query-type=all --lock-wait-timeout=180 --kill-long-queries-timeout=20 --kill-long-query-type=all /data/backups/
+
+
+工具参数
+https://blog.csdn.net/aoerqileng/article/details/110749253

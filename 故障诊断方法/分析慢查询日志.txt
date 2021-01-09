@@ -1,0 +1,7 @@
+awk '/^# Time:/{print $3,$4,c;c=0} /^# User/{c++}' slow-query.log
+
+
+快速查看最慢的10条sql这个可以结合tcpdump的结果进行分析
+
+mysqldumpslow -s al -n 10 slow.log
+

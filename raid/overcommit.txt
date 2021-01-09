@@ -1,0 +1,7 @@
+建议设置vm.swappiness=0
+
+不适用overcommit，overcommit就是说申请内存的时候不真正分配，随便申请，但是实际用的时候会被oom，设置成2代表的是分配给所有进程的内存超过swapd+N%*物理内存的时候会报错
+设置vm.overcommit_memory=2
+N的值由vm.overcommit_ratio设置。
+
+

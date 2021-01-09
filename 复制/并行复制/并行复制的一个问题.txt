@@ -1,0 +1,1 @@
+https://www.percona.com/blog/2017/01/27/wrong-seconds_behind_master-with-slave_parallel_workers-0/

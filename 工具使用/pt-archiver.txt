@@ -1,0 +1,18 @@
+归档数据到表或文件
+从线上服务器把数据归档到线下服务器和本地文件
+pt-archiver --source h=oltp_server,D=test,t=tbl --dest h=olap_server,P=3333,u=root,p=123,D=test,t=testbak  --file '/var/log/archive/%Y-%m-%d-%D.%t' --where "1=1" --limit 10000 --commit-each
+
+
+目标表结构需要提前存在，存在主键的情况下，2分钟10w数据
+
+pt-archiver --source h=xx.142.48,P=3333,u=root,p=123456,D=test,t=t_bigtable --charset 'utf8' --dest h=xx.142.48,P=3333,u=root,p=123456,D=test,t=testbak --where "table_schema='information_schema'" --progress 100000 --limit 1000 --txn-size=1000 --statistics
+
+执行的过程
+1现在数据库中执行下面的查询 WHERE (table_schema='information_schema') ORDER BY `create_time` LIMIT 10000
+2
+
+只做清理
+pt-archiver --source h=host,D=db,t=child --purge --where 'NOT EXISTS(SELECT * FROM parent WHERE col=child.col)'
+
+每1000行提交一次,每2000行打印一个标题显示进度,不删除源表数据,在归档完成后,打印统计信息.
+pt-archiver --source h=127.0.0.1,P=3306,u='xxxx',p='xxxx',D=db,t=tbl --file '/tmp/%D.%t_%Y%m%d%H%i%s.txt' --charset 'utf8' --where "oderTime < '2012-01-01 00:00:00'" --limit 1000 --commit-each --progress 2000 --statistics --no-delete

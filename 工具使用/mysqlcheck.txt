@@ -1,0 +1,11 @@
+/usr/local/mysql-5.6.25/bin/mysqlcheck -S /tmp/mysql_8888.sock -u root -p --check-upgrade --all-databases > mysql-check.log
+
+
+mysqlcheck做了什么事情：
+
+
+ mysqlcheck是一个表的维护工具，check repairs optimize analyze 表，他在执行的时候会加锁，阻塞别的会话，对于check操作添加的是read锁，mysql_upgrade会调用mysqlcheck,
+ mysqlcheck使用check table repair table  analyze table和optimize table语句。
+ 
+ 
+ 

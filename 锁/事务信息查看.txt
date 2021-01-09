@@ -1,0 +1,22 @@
+查看1s之前的事务信息
+SELECT trx.trx_id,
+       trx.trx_started,
+       trx.trx_mysql_thread_id
+FROM INFORMATION_SCHEMA.INNODB_TRX trx
+JOIN INFORMATION_SCHEMA.PROCESSLIST ps ON trx.trx_mysql_thread_id = ps.id
+WHERE trx.trx_started < CURRENT_TIMESTAMP - INTERVAL 1 SECOND
+  AND ps.user != 'system_user'G
+  
+  
+  查看当前会话中的事务id
+  
+  
+当前会话的事务的id
+ SELECT TRX_ID FROM INFORMATION_SCHEMA.INNODB_TRX  WHERE TRX_MYSQL_THREAD_ID = CONNECTION_ID();
+ 
+ 
+ 查看线程执行的事务的历史命令
+ https://www.percona.com/blog/2017/05/08/chasing-a-hung-transaction-in-mysql-innodb-history-length-strikes-back/
+ 
+ 
+ 

@@ -1,0 +1,8 @@
+
+This will freeze the program for some period of time, ranging from a second or so to much longer on very busy systems with a lot of memory and many threads in the program.
+
+In addition to freezing the server, there is also some risk of the server crashing or performing badly after GDB detaches from it.
+
+使用gdb获取进程的堆栈信息，并进行统计
+pt-pmp --binary mysqld --iterations 2 --interval 1 --save-samples
+
