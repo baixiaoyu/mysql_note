@@ -1,6 +1,6 @@
 对于唯一键值的锁定，next-key降级为record lock，这个是有条件的，查询的是唯一索引的全部的列，如果查询中只是查看了唯一索引中的部分列，那么还是使用的next-key lock锁定。
-
-repeatable read 对于解决幻想读怎么去理解。
+在主键上的查询如果没有对应的记录，也是next-key lock,不是单纯的行锁。
+repeatable read 对于解决幻想读怎么去理解。用gap锁解决了幻读，禁止插入记录
 
 read commit级别下的数据不一致的问题怎么重现？
 
